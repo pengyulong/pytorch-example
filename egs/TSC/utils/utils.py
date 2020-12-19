@@ -281,3 +281,144 @@ def save_result_dict_list(result_dict_list,csvfile):
         os.makedirs(csvfile.split(os.sep)[0:-1])
     data = pd.DataFrame(data=result_dict_list)
     data.to_csv(csvfile)
+
+
+def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_func, metrics, epochs, model_dir,lr_scheduler=None, restore_file=None):
+    """Train the model and evaluate every epoch.
+    Args:
+        model: (torch.nn.Module) the neural network
+        train_dataloader: (DataLoader) a torch.utils.data.DataLoader object that fetches training data
+        val_dataloader: (DataLoader) a torch.utils.data.DataLoader object that fetches validation data
+        optimizer: (torch.optim) optimizer for parameters of model
+        loss_func: a function that takes batch_output and batch_labels and computes the loss for the batch
+        metrics: (dict) a dictionary of functions that compute a metric using the output and labels of each batch
+        epoch: (int) a number indicate train epochs
+        model_dir: (string) directory containing config, weights and log
+        lr_scheduler: (torch.optime) lr_scheduler for learning rate 
+        restore_file: (string) optional- name of file to restore from (without its extension .pth.tar)
+    """
+    # reload weights from restore_file if specified
+    if restore_file is not None:
+        restore_path = os.path.join(model_dir, restore_file+'.pth.tar')
+        logging.info("Restoring parameters from {}".format(restore_path))
+        load_checkpoint(restore_path, model, optimizer)
+
+    train_loss_list, val_loss_list = [], []
+    early_stopping = EarlyStopping(patience=20,verbose=True)
+
+
+    best_val_f1 = 0.0  # 可以替换成其他评测指标,acc,precision,recall等
+    for epoch in range(epochs):
+
+        logging.info("Epoch {}/{}".format(epoch+1, epochs))
+
+        train_loss = train(model, optimizer, loss_func, train_dataloader, metrics, lr_scheduler)
+
+        val_metircs = evaluate(model, loss_func, val_dataloader, metrics)
+        val_loss = val_metircs['loss']
+
+        train_loss_list.append(train_loss)
+        val_loss_list.append(val_loss)
+
+        val_f1 = val_metircs['f1']
+        is_best = val_f1 >= best_val_f1
+
+        save_checkpoint({'epoch': epoch+1, 'state_dict': model.state_dict(
+        ), 'optim_dict': optimizer.state_dict()}, is_best=is_best, checkpoint=model_dir)
+
+        if is_best:
+            logging.info("- Found new best accuracy")
+            best_val_f1 = val_f1
+
+            best_json_path = os.path.join(
+                model_dir, "val_acc_best_weights.json")
+            save_dict_to_json(val_metircs, best_json_path)
+
+        last_json_path = os.path.join(model_dir, "val_acc_last_weights.json")
+        save_dict_to_json(val_metircs, last_json_path)
+
+        early_stopping(val_loss, model)
+        if early_stopping.early_stop:
+            logging.info("Early stopping!")
+            break
+
+    return {"train_loss": train_loss_list, "val_loss": val_loss_list}
+
+
+def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
+    """
+    Args:
+        model:(torch.nn.Module) the neural network
+        optimizer:(torch.optim) optimizer for parameters of model
+        loss_func: a funtion that takes batch_output and batch_labels and computers the loss for the batch
+        dataloader:(DataLoader) a torch.utils.data.DataLoader object that fetchs trainning data
+
+    """
+    device = get_device()
+    model.to(device)
+    model.train()
+    summ = []
+    loss_avg = RunningAverage()
+    if lr_scheduler is not None:
+        logging.info("lr = {}".format(lr_scheduler.get_last_lr()))
+    with tqdm(total=len(dataloader)) as t:
+        for step, data in enumerate(dataloader):
+            data_batch, label_batch = data
+            label_batch = label_batch.to(device)
+            output_batch = model(data_batch)
+            loss = loss_func(output_batch, label_batch)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            if lr_scheduler is not None:
+                lr_scheduler.step()
+            if step % 50 == 0:
+                output_batch = output_batch.detach().numpy()
+                label_batch = label_batch.detach().numpy()
+                summary_batch = {metric: metrics[metric](output_batch, label_batch) for metric in metrics}
+                summary_batch['loss'] = loss.item()
+                summ.append(summary_batch)
+            loss_avg.update(loss.item())
+            t.set_postfix(loss='{:05.3f}'.format(loss_avg()))
+            t.update()
+    metrics_mean = {metric: np.mean([x[metric]
+                                     for x in summ]) for metric in summ[0]}
+    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v)
+                                for k, v in metrics_mean.items())
+    logging.info("- Train metrics: "+metrics_string)
+
+    return metrics_mean['loss']
+
+
+def evaluate(model, loss_func, dataloader, metrics):
+    """Evaluate the model on `num_steps` batches.
+    Args:
+        model:(torch.nn.Module) the neural network
+        loss_func: a function that takes batch_output and batch_lables and compute the loss the batch.
+        dataloader:(DataLoader) a torch.utils.data.DataLoader object that fetches data.
+        metrics:(dict) a dictionary of functions that compute a metric using the output and labels of each batch.
+        num_steps:(int) number of batches to train on,each of size params.batch_size
+    """
+    model.eval()
+    device = get_device()
+    summ = []
+    with torch.no_grad():
+        for data in dataloader:
+            data_batch, label_batch = data
+            label_batch = label_batch.to(device)
+            output_batch = model(data_batch)
+            loss = loss_func(output_batch, label_batch)
+            output_batch = output_batch.detach().numpy()
+            label_batch = label_batch.detach().numpy()
+
+            summary_batch = {metric: metrics[metric](
+                output_batch, label_batch) for metric in metrics}
+            summary_batch['loss'] = loss.item()
+            summ.append(summary_batch)
+
+    metrics_mean = {metric: np.mean([x[metric]
+                                     for x in summ]) for metric in summ[0]}
+    metrics_string = " ; ".join("{}: {:05.3f}".format(k, v)
+                                for k, v in metrics_mean.items())
+    logging.info("- Eval metrics : " + metrics_string)
+    return metrics_mean
