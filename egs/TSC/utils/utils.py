@@ -31,6 +31,12 @@ def get_currTime():
     return currStr
 
 
+def split_dataSet(inputX, target, test_size=0.2):
+    trainX, testX, trainY, testY = train_test_split(
+        inputX, target, test_size=test_size, random_state=0)
+    return trainX, trainY, testX, testY
+
+
 def get_device():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     return device
