@@ -10,7 +10,6 @@ from torch.utils.data import (DataLoader,RandomSampler,SequentialSampler)
 from torch.utils.data import Dataset
 import pandas as pd
 from torch.utils.data.dataloader import default_collate
-import utils
 import os
 import logging
 from tqdm import tqdm
@@ -21,6 +20,8 @@ from torch.optim import lr_scheduler
 import pandas as pd
 from tensorboardX import SummaryWriter
 from model.model import SequenceClassify
+from utils import utils
+
 
 utils.setup_seed(2020)
 
@@ -51,12 +52,12 @@ def get_data(csvfile):
     dataX = normalize(dataX,axis=1,norm='max')
     dataY = np.array(dataSet.iloc[:,-1]-1)
     dataY = dataY.reshape(-1,1)
-    trainX,trainY,testX,testY = load_dataSet(dataX,dataY)
+    trainX,trainY,testX,testY = utils.split_dataSet(dataX,dataY)
     return trainX,trainY,testX,testY,seq_length
 
 class Job(object):
     def __init__(self):
-        self.device = get_device()
+        self.device = utils.get_device()
         self.batch_size = 128
         self.epoches = 200
         self.lr = 0.001
