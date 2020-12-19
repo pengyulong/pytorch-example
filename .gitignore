@@ -1,3 +1,5 @@
 .vscode/
 __pycach__/
 egs/TSC/train_data/
+egs/TSC/result_75/
+egs/TSC/model/__pycach__/
