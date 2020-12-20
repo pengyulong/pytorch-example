@@ -95,7 +95,7 @@ class Job(object):
         pos_weight = torch.Tensor([0.127,0.125,0.748]).to(device=self.device)
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-        valid_loss, train_loss = train_and_evaluate(model,train_dataloader,valid_dataloader,optim,criterion,metrics,self.epoches,model_dir=self.model_dir,restore_file=None)
+        valid_loss, train_loss = utils.train_and_evaluate(model,train_dataloader,valid_dataloader,optim,criterion,metrics,self.epoches,model_dir=self.model_dir,restore_file=None)
         curr_hyp = {"epochs":self.epoches,"batch_size":self.batch_size,"lr":self.lr,"hidden_num":self.hidden_num,"out_channels":self.out_channels}
         utils.save_dict_to_json(curr_hyp,os.path.join(self.model_dir,"train_hyp.json"))
         valid_df = pd.DataFrame(valid_loss)
