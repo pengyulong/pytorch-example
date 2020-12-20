@@ -34,15 +34,15 @@ class SequenceData(Dataset):
         self.dataX5 = torch.Tensor(dataX5)
         self.dataX6 = torch.Tensor(dataX6)
         self.dataX7 = torch.Tensor(dataX7)
-        one_hot = OneHotEncoder(sparse=False)
-        dataY = one_hot.fit_transform(dataY)
-        self.dataY = torch.Tensor(dataY)
+        #one_hot = OneHotEncoder(sparse=False)
+        #dataY = one_hot.fit_transform(dataY)
+        self.dataY = torch.LongTensor(dataY)
 
     def __len__(self):
         return len(self.dataY)
 
     def __getitem__(self,index):
-        return self.dataX1[index],self.dataX2[index],self.dataX3[index],self.dataX4[index],self.dataX5[index],self.dataX6[index],self.dataX7[index],self.dataY[index]
+        return (self.dataX1[index],self.dataX2[index],self.dataX3[index],self.dataX4[index],self.dataX5[index],self.dataX6[index],self.dataX7[index]),self.dataY[index]
 
 
 def get_data(csvfile):
@@ -51,7 +51,7 @@ def get_data(csvfile):
     seq_length = dataX.shape[1]
     dataX = normalize(dataX,axis=1,norm='max')
     dataY = np.array(dataSet.iloc[:,-1]-1)
-    dataY = dataY.reshape(-1,1)
+    # dataY = dataY.reshape(-1,1)
     trainX,trainY,testX,testY = utils.split_dataSet(dataX,dataY)
     return trainX,trainY,testX,testY,seq_length
 
@@ -59,7 +59,7 @@ class Job(object):
     def __init__(self):
         self.device = utils.get_device()
         self.batch_size = 128
-        self.epoches = 200
+        self.epoches = 2
         self.lr = 0.001
         self.trainX1,self.trainY,self.testX1,self.testY,seq_length1 = get_data(r"train_data/主机电流样本.csv")
         self.trainX2,self.trainY,self.testX2,self.testY,seq_length2 = get_data(r"train_data/负压样本.csv")
@@ -73,7 +73,7 @@ class Job(object):
         self.num_class = 3
         self.out_channels = 75 #[75,150,169,207,209,129]
         self.hidden_num = 10
-        self.loss_type = 'BCE' # BCE, CROSS, SMOOTH
+        self.loss_type = 'CROSS' # BCE, CROSS, SMOOTH
         self.model_dir = "./result_{}/{}".format(self.out_channels,self.loss_type)
         if os.path.exists(self.model_dir)==False:
             os.makedirs(self.model_dir)
@@ -85,15 +85,20 @@ class Job(object):
         train_data = SequenceData(self.trainX1,self.trainX2,self.trainX3,self.trainX4,self.trainX5,self.trainX6,self.trainX7,self.trainY)
         valid_data = SequenceData(self.testX1,self.testX2,self.testX3,self.testX4,self.testX5,self.testX6,self.testX7,self.testY)
 
-        train_dataloader = DataLoader(dataset=train_data,sampler=RandomSampler(train_data),batch_size=self.batch_size,shuffle=False,num_workers=0,collate_fn=default_collate,drop_last=True)
+        train_dataloader = DataLoader(dataset=train_data,sampler=RandomSampler(train_data),batch_size=self.batch_size,shuffle=False,num_workers=0,collate_fn=default_collate,drop_last=False)
 
         valid_dataloader = DataLoader(dataset=valid_data,batch_size=self.batch_size,shuffle=False,num_workers=0,drop_last=False)
         model = SequenceClassify(out_channels=self.out_channels,num_class=self.num_class,hidden_num=self.hidden_num,seq_lengths = self.seq_lengths)
         model.to(device=self.device)
-        optim = torch.optim.Adam(model.parameters(), lr = self.lr,betas=(0.9,0.99))
-
-        pos_weight = torch.Tensor([0.127,0.125,0.748]).to(device=self.device)
-        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        optim = torch.optim.AdamW(model.parameters(), lr = self.lr,betas=(0.9,0.99))
+        if self.loss_type == 'BCE':
+            pos_weight = torch.Tensor([0.127,0.125,0.748]).to(device=self.device)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        if self.loss_type == 'CROSS':
+            criterion = nn.CrossEntropyLoss()
+        if self.loss_type == 'SMOOTH':
+            criterion = utils.LabelSmoothingCrossEntropy()
+        metrics = utils.metrics
 
         valid_loss, train_loss = utils.train_and_evaluate(model,train_dataloader,valid_dataloader,optim,criterion,metrics,self.epoches,model_dir=self.model_dir,restore_file=None)
         curr_hyp = {"epochs":self.epoches,"batch_size":self.batch_size,"lr":self.lr,"hidden_num":self.hidden_num,"out_channels":self.out_channels}
@@ -110,21 +115,18 @@ class Job(object):
 
         model = SequenceClassify(out_channels=self.out_channels,num_class=self.num_class,hidden_num=self.hidden_num,seq_lengths = self.seq_lengths)
         utils.load_checkpoint(os.path.join(self.model_dir,"best.pth.tar"),model)
-        # model.to(device=self.device)
+        model.to(device=self.device)
         
         model.eval()
         with torch.no_grad():
             for batch in valid_dataloader:
-                inputX1,inputX2,inputX3,inputX4,inputX5,inputX6,inputX7,label_batch = batch
-                label_batch = label_batch
-                # inputX,inputY = inputX.to(device),inputY.to(device)
-                y_pred = np.argmax(model(inputX1,inputX2,inputX3,inputX4,inputX5,inputX6,inputX7).data.cpu().numpy(),axis=1).squeeze()
-                y_true = np.argmax(label_batch.data.cpu().numpy(),axis=1).squeeze()
-                # y_true = inputY.data.cpu().numpy().squeeze()
+                data_batch,label_batch = batch
+                label_batch = label_batch.to(self.device)
+                y_pred = np.argmax(model(data_batch).detach().cpu().numpy(),axis=1).squeeze()
+                y_true = label_batch.detach().cpu().numpy().squeeze()
                 result = pd.DataFrame(data={'y_true':y_true,'y_pred':y_pred},index=range(len(y_pred)))
                 result.to_csv(r"{}/result.csv".format(self.model_dir)) 
                 # print("r2:{},rmse:{}"(y_pred,y_true),utils.rmse(y_pred,y_true)))
-                evaluate_model(y_pred,y_true)
 
     def plot_loss(self):
         csvfile = os.path.join(self.model_dir,"loss.csv")
@@ -153,5 +155,6 @@ class Job(object):
 if __name__ == "__main__":
     job = Job()
     writer = job.writer
-    job.train()
+    # job.train()
     job.predict()
+    job.plot_loss()

@@ -308,44 +308,41 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
 
     train_loss_list, val_loss_list = [], []
     early_stopping = EarlyStopping(patience=20,verbose=True)
-
+    val_losses = []
 
     best_val_f1 = 0.0  # 可以替换成其他评测指标,acc,precision,recall等
     for epoch in range(epochs):
 
         logging.info("Epoch {}/{}".format(epoch+1, epochs))
-
-        train_loss = train(model, optimizer, loss_func, train_dataloader, metrics, lr_scheduler)
-
-        val_metircs = evaluate(model, loss_func, val_dataloader, metrics)
-        val_loss = val_metircs['loss']
-
-        train_loss_list.append(train_loss)
-        val_loss_list.append(val_loss)
-
-        val_f1 = val_metircs['f1']
+        train_metrics = train(model, optimizer, loss_func, train_dataloader, metrics, lr_scheduler)
+        val_metrics = evaluate(model, loss_func, val_dataloader, metrics)
+        train_loss_list.append(train_metrics)
+        val_loss_list.append(val_metrics)
+        
+        val_losses.append(val_metrics['loss'])
+        val_f1 = val_metrics['f1']
         is_best = val_f1 >= best_val_f1
 
         save_checkpoint({'epoch': epoch+1, 'state_dict': model.state_dict(
         ), 'optim_dict': optimizer.state_dict()}, is_best=is_best, checkpoint=model_dir)
 
         if is_best:
-            logging.info("- Found new best accuracy")
+            logging.info("- Found new best f1-macro")
             best_val_f1 = val_f1
 
             best_json_path = os.path.join(
-                model_dir, "val_acc_best_weights.json")
-            save_dict_to_json(val_metircs, best_json_path)
+                model_dir, "val_f1_best_weights.json")
+            save_dict_to_json(val_metrics, best_json_path)
 
-        last_json_path = os.path.join(model_dir, "val_acc_last_weights.json")
-        save_dict_to_json(val_metircs, last_json_path)
+        last_json_path = os.path.join(model_dir, "val_f1_last_weights.json")
+        save_dict_to_json(val_metrics, last_json_path)
 
-        early_stopping(val_loss, model)
+        early_stopping(val_metrics['loss'], model)
         if early_stopping.early_stop:
             logging.info("Early stopping!")
             break
 
-    return {"train_loss": train_loss_list, "val_loss": val_loss_list}
+    return train_loss_list,val_loss_list
 
 
 def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
@@ -376,8 +373,8 @@ def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
             if lr_scheduler is not None:
                 lr_scheduler.step()
             if step % 50 == 0:
-                output_batch = output_batch.detach().numpy()
-                label_batch = label_batch.detach().numpy()
+                output_batch = output_batch.detach().cpu().numpy()
+                label_batch = label_batch.detach().cpu().numpy()
                 summary_batch = {metric: metrics[metric](output_batch, label_batch) for metric in metrics}
                 summary_batch['loss'] = loss.item()
                 summ.append(summary_batch)
@@ -390,7 +387,7 @@ def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
                                 for k, v in metrics_mean.items())
     logging.info("- Train metrics: "+metrics_string)
 
-    return metrics_mean['loss']
+    return metrics_mean
 
 
 def evaluate(model, loss_func, dataloader, metrics):
@@ -411,8 +408,8 @@ def evaluate(model, loss_func, dataloader, metrics):
             label_batch = label_batch.to(device)
             output_batch = model(data_batch)
             loss = loss_func(output_batch, label_batch)
-            output_batch = output_batch.detach().numpy()
-            label_batch = label_batch.detach().numpy()
+            output_batch = output_batch.detach().cpu().numpy()
+            label_batch = label_batch.detach().cpu().numpy()
 
             summary_batch = {metric: metrics[metric](
                 output_batch, label_batch) for metric in metrics}
