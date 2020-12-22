@@ -21,6 +21,7 @@ import pandas as pd
 from tensorboardX import SummaryWriter
 from model.model import SequenceClassify
 from utils import utils
+from config import load_args
 
 
 utils.setup_seed(2020)
@@ -56,11 +57,11 @@ def get_data(csvfile):
     return trainX,trainY,testX,testY,seq_length
 
 class Job(object):
-    def __init__(self):
+    def __init__(self,args):
         self.device = utils.get_device()
-        self.batch_size = 128
-        self.epoches = 2
-        self.lr = 0.001
+        self.batch_size = args.batch_size
+        self.epoches = args.epochs
+        self.lr = args.lr
         self.trainX1,self.trainY,self.testX1,self.testY,seq_length1 = get_data(r"train_data/主机电流样本.csv")
         self.trainX2,self.trainY,self.testX2,self.testY,seq_length2 = get_data(r"train_data/负压样本.csv")
         self.trainX3,self.trainY,self.testX3,self.testY,seq_length3 = get_data(r"train_data/料浆样本.csv")
@@ -70,9 +71,9 @@ class Job(object):
         self.trainX7,self.trainY,self.testX7,self.testY,seq_length7 = get_data(r"train_data/一次风样本.csv")
         self.seq_lengths = [seq_length1,seq_length2,seq_length3,seq_length4,seq_length5,seq_length6,seq_length7]
 
-        self.num_class = 3
-        self.out_channels = 75 #[75,150,169,207,209,129]
-        self.hidden_num = 10
+        self.num_class = args.num_class
+        self.out_channels = args.filter_num #[75,150,169,207,209,129]
+        self.hidden_num = args.hidden_num
         self.loss_type = 'CROSS' # BCE, CROSS, SMOOTH
         self.model_dir = "./result_{}/{}".format(self.out_channels,self.loss_type)
         if os.path.exists(self.model_dir)==False:
@@ -153,7 +154,8 @@ class Job(object):
 
 
 if __name__ == "__main__":
-    job = Job()
+    args = load_args()
+    job = Job(args)
     writer = job.writer
     # job.train()
     job.predict()
