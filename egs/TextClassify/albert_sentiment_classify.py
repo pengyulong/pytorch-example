@@ -17,8 +17,7 @@ import matplotlib.pyplot as plt
 setup_seed(2020)
 
 class SentimentData(Dataset):
-    def __init__(self, encoder_inputs, labels, tokenizer):
-        self.albert_tokenizer = tokenizer
+    def __init__(self, encoder_inputs, labels):
         self.encoder_inputs = encoder_inputs
         self.label = labels
 
