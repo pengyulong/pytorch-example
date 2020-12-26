@@ -43,7 +43,7 @@ def text_filter(x):
     x = x.strip('"')
     x = filter_duplicate_space(x)
     x = remove_duplicate(x)
-    x = x.lower()
+    # x = x.lower()
     return x
 
 
