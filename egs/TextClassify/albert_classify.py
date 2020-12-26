@@ -54,9 +54,7 @@ class SentimentData(Dataset):
 
     @classmethod
     def from_txt(cls, csvfile):
-        """
-            
-        """
+        """"""
         dataSet = pd.read_csv(csvfile,sep='\t',header=None)
         dataSet.columns = ['content','label']
         dataSet['content'] = dataSet['content'].apply(text_filter)
@@ -67,10 +65,6 @@ class SentimentData(Dataset):
             label = int(row['label']) # [1,0,-1,-2] ->[3,2,1,0]
             dataX.append(content)
             dataY.append(label)
-        # sorted_result = sorted(enumerate(dataX),key=lambda x:len(x[1]))
-        # dataX = [e[1] for e in sorted_result]
-        # index = [e[0] for e in sorted_result]
-        # dataY = [dataY[i] for i in index]
         return cls(dataX, dataY)
 
 def get_device():

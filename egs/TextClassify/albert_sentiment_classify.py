@@ -12,11 +12,9 @@ from torch.utils.data.dataloader import default_collate
 import torch.nn as nn
 import pickle
 from transformers import get_linear_schedule_with_warmup
-from utils import get_device,train_and_evaluate,save_dict_to_json,save_result_dict_list,load_checkpoint,setup_seed
+from utils import get_device,train_and_evaluate,save_dict_to_json,save_result_dict_list,load_checkpoint,setup_seed,classify_metrics
 from model import BertSequenceClassfier
 import matplotlib.pyplot as plt
-
-
 setup_seed(2020)
 
 class SentimentData(Dataset):
@@ -56,21 +54,37 @@ class SentimentData(Dataset):
         encoder_inputs = tokenizer(dataX,return_tensors='pt',padding=True)
         return cls(encoder_inputs, dataY, tokenizer)
 
+    @classmethod
+    def from_txt(cls, csvfile):
+        """"""
+        dataSet = pd.read_csv(csvfile,sep='\t',header=None)
+        dataSet.columns = ['content','label']
+        dataSet['content'] = dataSet['content'].apply(text_filter)
+
+        dataX, dataY = [], []
+        for (_, row) in tqdm(dataSet.iterrows()):
+            content = text_filter(row['content'])
+            label = int(row['label']) # [1,0,-1,-2] ->[3,2,1,0]
+            dataX.append(content)
+            dataY.append(label)
+        return cls(dataX, dataY)
+
 
 class Job:
     def __init__(self):
         self.device = get_device()
         self.batch_size = 32
-        self.epoches = 100
-        self.lr = 0.00001
+        self.epoches = 10
+        self.lr = 2e-5
         self.num_class = 4
-        self.sent_class = "location_traffic_convenience"
-        self.train_file = r"data/train.csv"
-        self.valid_file = r"data/valid.csv"
-        self.train_pkl_file = r"data/train.pkl"
-        self.valid_pkl_file = r"data/valid.pkl"
+        self.sent_class = "TilteClassify"
+        self.train_file = r"data2/train.csv"
+        self.valid_file = r"data2/valid.csv"
+        self.train_pkl_file = r"data2/train.pkl"
+        self.valid_pkl_file = r"data2/valid.pkl"
         self.pool_type = "avg"
         self.max_length = 500
+        self.warmup_ratio = 0.1
 
         self.pretrained_name = "voidful/albert_chinese_small"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
@@ -82,7 +96,7 @@ class Job:
             with open(self.train_pkl_file,"rb") as f:
                 self.train_dataset = pickle.load(f)
         else:
-            self.train_dataset = SentimentData.from_csv(self.train_file, self.sent_class, self.albert_tokenizer)
+            self.train_dataset = SentimentData.from_txt(self.train_file, self.sent_class, self.albert_tokenizer)
             with open(self.train_pkl_file,"wb") as f:
                 pickle.dump(self.train_dataset,f)
         if os.path.isfile(self.valid_pkl_file):
@@ -90,7 +104,7 @@ class Job:
                 self.valid_dataset = pickle.load(f)
         else:
             with open(self.valid_pkl_file,"wb") as f:
-                self.valid_dataset = SentimentData.from_csv(self.valid_file, self.sent_class, self.albert_tokenizer)
+                self.valid_dataset = SentimentData.from_txt(self.valid_file, self.sent_class, self.albert_tokenizer)
                 pickle.dump(self.valid_dataset,f)
 
         self.model_dir = "./{}".format(self.sent_class)
@@ -124,12 +138,12 @@ class Job:
         optimizer = torch.optim.AdamW(
             optimizer_grouped_parameters, lr=self.lr, eps = 1e-8)
 
-        lr_scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps= 500, num_training_steps=self.epoches*len(train_dataloader))
+        lr_scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps= self.warmup_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
         criterion = nn.CrossEntropyLoss()
-        self.loss_result = utils.train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,
-                                 utils.metrics, self.epoches, self.model_dir, lr_scheduler, restore_file=None)
+        self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,
+                                 classify_metrics, self.epoches, self.model_dir, lr_scheduler, restore_file=None)
         curr_hyp = {"epochs": self.epoches,
-                    "batch_size": self.batch_size, "lr": self.lr}
+                    "batch_size": self.batch_size, "lr": self.lr, "pool_type":self.pool_type}
         save_dict_to_json(curr_hyp, os.path.join(
             self.model_dir, "train_hyp.json"))
         save_result_dict_list(self.loss_result,os.path.join(self.model_dir,"loss.csv"))
