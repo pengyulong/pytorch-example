@@ -99,7 +99,7 @@ class Job:
         train_dataloader = DataLoader(dataset=self.train_dataset, sampler=RandomSampler(
             self.train_dataset), batch_size=self.batch_size, shuffle=False, num_workers=0, collate_fn=default_collate, drop_last=False)
         valid_dataloader = DataLoader(
-            dataset=self.valid_dataset, batch_size=self.batch_size//2, shuffle=False, num_workers=0, drop_last=False)
+            dataset=self.valid_dataset, batch_size=self.batch_size, shuffle=True, num_workers=0, drop_last=False)
         model = BertSequenceClassfier(self.albert_model,self.albert_tokenizer,self.albert_config,num_class=self.num_class,pool_type=self.pool_type)
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
