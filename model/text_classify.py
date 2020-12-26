@@ -48,7 +48,7 @@ class BertSequenceClassfier(nn.Module):
         if self.pool_type == 'CLS':
             bert_out = bert_out[:,0,:]
         else:
-            bert_out = bert_out.permute(0,2,1)[:,1:-1,:]
+            bert_out = bert_out[:,1:-1,:].permute(0,2,1)
             bert_out = self.pool_layer(bert_out).squeeze(2)
         bert_out = self.dropout(bert_out)
         bert_out = self.fc1(bert_out)

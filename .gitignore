@@ -5,3 +5,7 @@ egs/TimeSequenceClassify/result*/
 egs/TimeSequenceClassify/model/__pycach__/
 egs/TimeSequenceClassify/train_data/
 egs/TextClassify/data2/
+egs/TextClassify/data2
+egs/TextClassify/model
+egs/TextClassify/utils
+egs/TextClassify/TilteClassify/*

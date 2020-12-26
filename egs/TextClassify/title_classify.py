@@ -51,9 +51,9 @@ class Job:
         self.num_class = 10
         self.sent_class = "TilteClassify"
         self.train_file = r"data2/train.txt"
-        self.valid_file = r"data2/valid.txt"
+        self.valid_file = r"data2/test.txt"
         self.train_pkl_file = r"data2/train.pkl"
-        self.valid_pkl_file = r"data2/valid.pkl"
+        self.valid_pkl_file = r"data2/test.pkl"
         self.pool_type = "avg"
         self.max_length = 500
         self.warmup_ratio = 0.1
@@ -68,7 +68,7 @@ class Job:
             with open(self.train_pkl_file,"rb") as f:
                 self.train_dataset = pickle.load(f)
         else:
-            self.train_dataset = SentimentData.from_txt(self.train_file)
+            self.train_dataset = SentimentData.from_table(self.train_file)
             with open(self.train_pkl_file,"wb") as f:
                 pickle.dump(self.train_dataset,f)
         if os.path.isfile(self.valid_pkl_file):
@@ -76,7 +76,7 @@ class Job:
                 self.valid_dataset = pickle.load(f)
         else:
             with open(self.valid_pkl_file,"wb") as f:
-                self.valid_dataset = SentimentData.from_txt(self.valid_file)
+                self.valid_dataset = SentimentData.from_table(self.valid_file)
                 pickle.dump(self.valid_dataset,f)
 
         self.model_dir = "./{}".format(self.sent_class)
