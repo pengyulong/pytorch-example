@@ -5,7 +5,7 @@ def load_args():
 
     # training parameter
     parser.add_argument("--batch_size",type=int,default=32)
-    parser.add_argument("--epoches",type=float,default=100)
+    parser.add_argument("--epoches",type=int,default=100)
     parser.add_argument("--lr",type=float,default=0.001)
     parser.add_argument("--loss_type",type=str,default='CROSS')
 

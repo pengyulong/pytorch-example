@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
 from sklearn.metrics import f1_score,accuracy_score,precision_score,recall_score
+from sklearn.metrics import r2_score,mean_absolute_error,mean_squared_error
 import numpy as np
 import json
 import shutil
@@ -16,6 +17,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 import time
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import normalize
 
 def setup_seed(seed):
     torch.manual_seed(seed)
@@ -28,6 +30,15 @@ def split_dataSet(inputX, target, test_size=0.2):
     trainX, testX, trainY, testY = train_test_split(
         inputX, target, test_size=test_size, random_state=0)
     return trainX, trainY, testX, testY
+
+def read_sequence_data(csvfile):
+    dataSet = pd.read_csv(csvfile,index_col=0,header=None)
+    dataX = np.array(dataSet.iloc[:,:-1])
+    seq_length = dataX.shape[1]
+    dataX = normalize(dataX,axis=1,norm='max')
+    dataY = np.array(dataSet.iloc[:,-1]-1)
+    trainX,trainY,testX,testY = split_dataSet(dataX,dataY)
+    return trainX,trainY,testX,testY,seq_length
 
 def get_device():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -167,7 +178,27 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-metrics = {'f1':f1,'acc':acc,'recall':recall,'precision':precision}
+classify_metrics = {'f1':f1,'acc':acc,'recall':recall,'precision':precision}
+
+
+def r_score(y_pred,y_true):
+    ans = r2_score(y_true=y_true,y_pred=y_pred)
+    return ans if ans < 0 else np.sqrt(ans)
+
+def rmse(y_pred,y_true):
+    return np.sqrt(mean_squared_error(y_true=y_true,y_pred=y_pred))
+
+def mae(y_pred,y_true):
+    return abs(y_true - y_pred).mean()
+
+def rae(y_pred,y_true):
+    return np.sqrt(abs(y_true - y_pred).sum()/abs(y_true - y_true.mean()).sum())
+
+def rrse(y_pred,y_true):
+    return np.sqrt(((y_true - y_pred)**2).sum()/((y_true - y_true.mean())**2).sum())
+
+
+regression_metrics = {'r':r_score,'rmse':rmse,'mae':mae,'rae':rae,'rrse':rrse}
 
 class RunningAverage():
     """

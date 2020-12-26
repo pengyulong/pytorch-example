@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from utils import utils
-
 
 class MultiHeadSelfAttention(nn.Module):
     def __init__(self,d_model,n_head=1,num_layers=1):
@@ -10,8 +8,7 @@ class MultiHeadSelfAttention(nn.Module):
         self.num_layers = num_layers
         self.n_head = n_head
         self.d_model = d_model
-        self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.d_model,nhead=self.n_head)
-        self.attention_layer = nn.TransformerEncoder(self.encoder_layer,num_layers=self.num_layers)
+        self.attention_layer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=self.d_model,nhead=self.n_head),num_layers=self.num_layers)
         self.W = nn.Parameter(torch.Tensor(7,1))
         nn.init.xavier_normal_(self.W) #初始化,必须添加
 
@@ -93,7 +90,6 @@ class SequenceClassify(nn.Module):
         self.hidden_num = hidden_num
         self.seq_lengths = seq_lengths
         self.mode = mode
-        self.device = utils.get_device()
         self.feature_layer1 = TimeSeriesFeature(filter_num=self.out_channels,seq_length=self.seq_lengths[0],num_class=self.num_class)
         self.feature_layer2 = TimeSeriesFeature(filter_num=self.out_channels,seq_length=self.seq_lengths[1],num_class=self.num_class)
         self.feature_layer3 = TimeSeriesFeature(filter_num=self.out_channels,seq_length=self.seq_lengths[2],num_class=self.num_class)
@@ -117,13 +113,22 @@ class SequenceClassify(nn.Module):
         
     def forward(self,inputs):
         x1,x2,x3,x4,x5,x6,x7 = inputs
-        f1 = self.feature_layer1(x1.to(self.device))
-        f2 = self.feature_layer2(x2.to(self.device))
-        f3 = self.feature_layer3(x3.to(self.device))
-        f4 = self.feature_layer4(x4.to(self.device))
-        f5 = self.feature_layer5(x5.to(self.device))
-        f6 = self.feature_layer6(x6.to(self.device))
-        f7 = self.feature_layer7(x7.to(self.device))
+        # f1 = self.feature_layer1(x1.to(self.device))
+        # f2 = self.feature_layer2(x2.to(self.device))
+        # f3 = self.feature_layer3(x3.to(self.device))
+        # f4 = self.feature_layer4(x4.to(self.device))
+        # f5 = self.feature_layer5(x5.to(self.device))
+        # f6 = self.feature_layer6(x6.to(self.device))
+        # f7 = self.feature_layer7(x7.to(self.device))
+
+        f1 = self.feature_layer1(x1)
+        f2 = self.feature_layer2(x2)
+        f3 = self.feature_layer3(x3)
+        f4 = self.feature_layer4(x4)
+        f5 = self.feature_layer5(x5)
+        f6 = self.feature_layer6(x6)
+        f7 = self.feature_layer7(x7)
+
         # 7*(B,H) -> (B,H,7)
         concat = torch.cat((f1,f2,f3,f4,f5,f6,f7),dim=2)
         if self.mode == 'avg':
