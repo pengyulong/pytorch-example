@@ -29,7 +29,7 @@ class SentimentData(Dataset):
         return self.data[index], self.label[index]
 
     @classmethod
-    def from_csv(cls, csvfile, tokenizer, sent_class, bert_tokenizer, max_length=510):
+    def from_csv(cls, csvfile, tokenizer, sent_class, max_length=510):
         """
         sent_class由20个类别组成,分别是location_traffic_convenience,location_distance_from_business_district,
         location_easy_to_find,service_wait_time,service_waiters_attitude,service_parking_convenience,
@@ -43,7 +43,7 @@ class SentimentData(Dataset):
         dataX, dataY = [], []
         for (_, row) in tqdm(dataSet.iterrows()):
             content = text_filter(row['content'])
-            tokens = bert_tokenizer.tokenize(content)
+            tokens = tokenizer.tokenize(content)
             if len(tokens) >= max_length:
                 continue
             label = int(row[sent_class]) + 2 # [1,0,-1,-2] ->[3,2,1,0]
@@ -78,7 +78,7 @@ class Job:
             with open(self.train_pkl_file,"rb") as f:
                 self.train_dataset = pickle.load(f)
         else:
-            self.train_dataset = SentimentData.from_txt(self.train_file)
+            self.train_dataset = SentimentData.from_csv(self.train_file,self.albert_tokenizer,self.sent_class,self.max_length)
             with open(self.train_pkl_file,"wb") as f:
                 pickle.dump(self.train_dataset,f)
         if os.path.isfile(self.valid_pkl_file):
@@ -86,7 +86,7 @@ class Job:
                 self.valid_dataset = pickle.load(f)
         else:
             with open(self.valid_pkl_file,"wb") as f:
-                self.valid_dataset = SentimentData.from_txt(self.valid_file)
+                self.valid_dataset = SentimentData.from_csv(self.valid_file,self.albert_tokenizer,self.sent_class,self.max_length)
                 pickle.dump(self.valid_dataset,f)
 
         self.model_dir = "./{}".format(self.sent_class)
@@ -109,7 +109,7 @@ class Job:
 
         train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,classify_metrics, self.epoches, self.model_dir,lr_scheduler,restore_file=None)
         curr_hyp = {"epochs": self.epoches,
-                    "batch_size": self.batch_size, "lr": self.lr}
+                    "batch_size": self.batch_size, "lr": self.lr, "pool_type":self.pool_type}
         save_dict_to_json(curr_hyp, os.path.join(
             self.model_dir, "train_hyp.json"))
 
