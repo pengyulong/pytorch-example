@@ -1,6 +1,7 @@
 .vscode/
 __pycach__/
-egs/TSC/train_data/
-egs/TSC/result_75/
-egs/TSC/model/__pycach__/
-egs/TSC/train_data/
+egs/TimeSequenceClassify/train_data/
+egs/TimeSequenceClassify/result*/
+egs/TimeSequenceClassify/model/__pycach__/
+egs/TimeSequenceClassify/train_data/
+egs/TextClassify/data2/
