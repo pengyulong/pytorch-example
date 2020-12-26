@@ -3,7 +3,7 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset,DataLoader
-from sklearn.metrics import f1_score,accuracy_score,precision_score,recall_score,roc_auc_score
+from sklearn.metrics import f1_score,accuracy_score,precision_score,recall_score
 import numpy as np
 import json
 import shutil
@@ -17,8 +17,6 @@ import torch.nn.functional as F
 import time
 from sklearn.model_selection import train_test_split
 
-
-
 def setup_seed(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -26,19 +24,10 @@ def setup_seed(seed):
     random.seed(seed)
     torch.backends.cudnn.deterministic = True
 
-
-def get_currTime():
-    curr = time.localtime()
-    currStr = "{}{}{:02d}{:02d}{:02d}{:02d}".format(curr.tm_year,curr.tm_mon,curr.tm_mday,curr.tm_hour,curr.tm_min,curr.tm_sec)
-
-    return currStr
-
-
 def split_dataSet(inputX, target, test_size=0.2):
     trainX, testX, trainY, testY = train_test_split(
         inputX, target, test_size=test_size, random_state=0)
     return trainX, trainY, testX, testY
-
 
 def get_device():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -270,7 +259,7 @@ def load_checkpoint(checkpoint, model, optimizer=None):
     """
     if not os.path.exists(checkpoint):
         raise("File doesn't exist {}".format(checkpoint))
-    checkpoint = torch.load(checkpoint)
+    checkpoint = torch.load(checkpoint,map_location=get_device())
     model.load_state_dict(checkpoint['state_dict'])
 
     if optimizer:

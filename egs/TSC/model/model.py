@@ -109,8 +109,8 @@ class SequenceClassify(nn.Module):
             nn.Linear(self.hidden_num,self.num_class),
             nn.Dropout(0.2)
         )
-        self.W = nn.Parameter(torch.Tensor(7,1))
-        nn.init.xavier_normal_(self.W) #初始化,必须添加
+        # self.W = nn.Parameter(torch.Tensor(7,1))
+        # nn.init.xavier_normal_(self.W) #初始化,必须添加
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.att_layer = MultiHeadSelfAttention(d_model=self.out_channels,n_head=1,num_layers=1)
 
