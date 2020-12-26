@@ -17,48 +17,22 @@ import matplotlib.pyplot as plt
 setup_seed(2020)
 
 class SentimentData(Dataset):
-    def __init__(self, encoder_inputs, labels):
-        self.encoder_inputs = encoder_inputs
-        self.label = labels
+    def __init__(self,dataX,dataY):
+        self.dataX = dataX
+        self.dataY = dataY
 
     def __len__(self):
-        return len(self.label)
+        return len(self.dataY)
 
     def __getitem__(self, index):
-        item = {key:torch.tensor(val[index]) for key,val in (self.encoder_inputs).items()}
-        item['label'] = torch.tensor(self.label[index])
-        return item
+        return self.dataX[index],self.dataY[index]
 
     @classmethod
-    def from_csv(cls, csvfile, sent_class, tokenizer, max_length=500):
-        """
-            sent_class由20个类别组成,分别是location_traffic_convenience,location_distance_from_business_district,
-            location_easy_to_find,service_wait_time,service_waiters_attitude,service_parking_convenience,
-            service_serving_speed,price_level,price_cost_effective,price_discount,environment_decoration,
-            environment_noise,environment_space,environment_cleaness,dish_portion,dish_taste,dish_look,
-            dish_recommendation,others_overall_experience,others_willing_to_consume_again'
-        """
-        dataSet = pd.read_csv(csvfile,sep='\t',header=None)
-        dataSet.columns = ['text','label']
-        dataX, dataY = [], []
-        for i, (index, row) in tqdm(enumerate(dataSet.iterrows())):
-            content = filter(row['text'])
-            length = len(content)
-            if length >= max_length:
-                continue
-            label = int(row[sent_class]) + 2 # [1,0,-1,-2] ->[3,2,1,0]
-            dataX.append(content)
-            dataY.append(label)
-        encoder_inputs = tokenizer(dataX,return_tensors='pt',padding=True)
-        return cls(encoder_inputs, dataY, tokenizer)
-
-    @classmethod
-    def from_txt(cls, csvfile):
+    def from_table(cls, textfile):
         """"""
-        dataSet = pd.read_csv(csvfile,sep='\t',header=None)
+        dataSet = pd.read_csv(textfile,sep='\t',header=None)
         dataSet.columns = ['content','label']
         dataSet['content'] = dataSet['content'].apply(text_filter)
-
         dataX, dataY = [], []
         for (_, row) in tqdm(dataSet.iterrows()):
             content = text_filter(row['content'])
@@ -74,7 +48,7 @@ class Job:
         self.batch_size = 32
         self.epoches = 10
         self.lr = 2e-5
-        self.num_class = 4
+        self.num_class = 10
         self.sent_class = "TilteClassify"
         self.train_file = r"data2/train.txt"
         self.valid_file = r"data2/valid.txt"
