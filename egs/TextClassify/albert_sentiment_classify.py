@@ -77,8 +77,8 @@ class Job:
         self.lr = 2e-5
         self.num_class = 4
         self.sent_class = "TilteClassify"
-        self.train_file = r"data2/train.csv"
-        self.valid_file = r"data2/valid.csv"
+        self.train_file = r"data2/train.txt"
+        self.valid_file = r"data2/valid.txt"
         self.train_pkl_file = r"data2/train.pkl"
         self.valid_pkl_file = r"data2/valid.pkl"
         self.pool_type = "avg"
