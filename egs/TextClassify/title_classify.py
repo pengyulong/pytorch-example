@@ -45,7 +45,7 @@ class SentimentData(Dataset):
 class Job:
     def __init__(self):
         self.device = get_device()
-        self.batch_size = 32
+        self.batch_size = 64
         self.epoches = 10
         self.lr = 2e-5
         self.num_class = 10
@@ -58,7 +58,7 @@ class Job:
         self.max_length = 500
         self.warmup_ratio = 0.1
 
-        self.pretrained_name = "voidful/albert_chinese_small"
+        self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.albert_model = BertModel.from_pretrained(self.pretrained_name)
@@ -90,12 +90,12 @@ class Job:
             self.train_dataset), batch_size=self.batch_size, shuffle=False, num_workers=0,drop_last=False)
 
         valid_dataloader = DataLoader(
-            dataset=self.valid_dataset, batch_size=self.batch_size//2, shuffle=False, num_workers=0, drop_last=False)
+            dataset=self.valid_dataset, batch_size=self.batch_size, shuffle=True, num_workers=0, drop_last=False)
         
         model = BertSequenceClassfier(self.albert_model,self.albert_tokenizer,self.albert_config,num_class=self.num_class,pool_type=self.pool_type)    
 
 
-        # model.to(device=self.device)
+        model.to(device=self.device)
         no_decay = ["bias", "LayerNorm.weight"]
         optimizer_grouped_parameters = [
             {
@@ -122,21 +122,20 @@ class Job:
 
         
     def predict(self):
-        valid_dataloader = DataLoader(dataset=self.valid_dataset, batch_size=len(
-            self.valid_dataset), shuffle=False, num_workers=0, drop_last=False)
+        valid_dataloader = DataLoader(dataset=self.valid_dataset, batch_size=self.batch_size, shuffle=False, num_workers=0, drop_last=False)
         model = BertSequenceClassfier(self.albert_model,self.albert_tokenizer,self.albert_config,num_class=self.num_class,pool_type=self.pool_type) 
         load_checkpoint(os.path.join(
             self.model_dir, "best.pth.tar"), model)
-        # model.to(device=self.device)
+        model.to(self.device)
         model.eval()
         y_preds, y_trues = [], []
-        for data in valid_dataloader:
+        for data in tqdm(valid_dataloader):
             inputX, inputY = data
             # inputX = inputX.to(self.device)
             inputY = inputY.to(self.device)
             y_pred = np.argmax(
-                model(inputX).data.cpu().numpy(), axis=1).squeeze()
-            y_true = inputY.data.cpu().numpy().squeeze()
+                model(inputX).detach().cpu().numpy(), axis=1).squeeze()
+            y_true = inputY.detach().cpu().numpy().squeeze()
             y_preds.extend(y_pred.tolist())
             y_trues.extend(y_true.tolist())
         result = pd.DataFrame(
@@ -171,4 +170,4 @@ if __name__ == "__main__":
     job = Job()
     job.train()
     job.predict()
-    job.plot_loss()
+    #job.plot_loss()
