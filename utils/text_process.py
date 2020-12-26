@@ -1,11 +1,11 @@
 import pandas as pd
 import six
-from text_utils import WordCounter
 import numpy as np
 from tqdm import tqdm
 import traceback
 import jieba
 import codecs
+from .text_utils import WordCounter
 
 
 def cut(text, type='word'):

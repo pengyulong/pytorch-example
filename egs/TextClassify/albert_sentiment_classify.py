@@ -3,7 +3,6 @@ from transformers import BertTokenizer, BertModel, BertConfig
 import numpy as np
 import pandas as pd
 from utils import text_filter
-import utils
 from tqdm import tqdm
 import os
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler)
@@ -12,7 +11,7 @@ from torch.utils.data.dataloader import default_collate
 import torch.nn as nn
 import pickle
 from transformers import get_linear_schedule_with_warmup
-from utils import get_device,train_and_evaluate,save_dict_to_json,save_result_dict_list,load_checkpoint,setup_seed,classify_metrics
+from utils import get_device,train_and_evaluate,save_dict_to_json,save_result_dict_list,load_checkpoint,setup_seed,classify_metrics,set_logger
 from model import BertSequenceClassfier
 import matplotlib.pyplot as plt
 setup_seed(2020)
@@ -96,7 +95,7 @@ class Job:
             with open(self.train_pkl_file,"rb") as f:
                 self.train_dataset = pickle.load(f)
         else:
-            self.train_dataset = SentimentData.from_txt(self.train_file, self.sent_class, self.albert_tokenizer)
+            self.train_dataset = SentimentData.from_txt(self.train_file)
             with open(self.train_pkl_file,"wb") as f:
                 pickle.dump(self.train_dataset,f)
         if os.path.isfile(self.valid_pkl_file):
@@ -104,13 +103,13 @@ class Job:
                 self.valid_dataset = pickle.load(f)
         else:
             with open(self.valid_pkl_file,"wb") as f:
-                self.valid_dataset = SentimentData.from_txt(self.valid_file, self.sent_class, self.albert_tokenizer)
+                self.valid_dataset = SentimentData.from_txt(self.valid_file)
                 pickle.dump(self.valid_dataset,f)
 
         self.model_dir = "./{}".format(self.sent_class)
         if os.path.exists(self.model_dir) == False:
             os.mkdir(self.model_dir)
-        self.log_file = utils.set_logger(
+        self.log_file = set_logger(
             os.path.join(self.model_dir, "train.log"))
 
     def train(self):
