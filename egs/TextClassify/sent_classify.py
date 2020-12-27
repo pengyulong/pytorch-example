@@ -56,7 +56,7 @@ class Job:
     def __init__(self):
         self.device = get_device()
         self.batch_size = 64
-        self.epoches = 10
+        self.epoches = 5
         self.lr = 2e-5
         self.num_class = 4
         self.sent_class = r"location_traffic_convenience"
