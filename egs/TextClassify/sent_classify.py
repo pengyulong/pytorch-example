@@ -68,9 +68,9 @@ class Job:
         self.warmup_ratio = 0.1
         self.pool_type = "avg" # avg,max,cls
 
-        # self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
+        self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
         # self.pretrained_name = "hfl/chinese-bert-wwm-ext"
-        self.pretrained_name = "voidful/albert_chinese_small"
+        # self.pretrained_name = "voidful/albert_chinese_small"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.albert_model = BertModel.from_pretrained(self.pretrained_name)

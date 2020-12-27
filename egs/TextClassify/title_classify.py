@@ -58,7 +58,7 @@ class Job:
         self.max_length = 500
         self.warmup_ratio = 0.1
 
-        self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
+        self.pretrained_name = "hfl/chinese-roberta-wwm-ext"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.albert_model = BertModel.from_pretrained(self.pretrained_name)
@@ -168,6 +168,6 @@ class Job:
 
 if __name__ == "__main__":
     job = Job()
-    # job.train()
+    job.train()
     job.predict()
     job.plot_loss()
