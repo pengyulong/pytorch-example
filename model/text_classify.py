@@ -39,6 +39,7 @@ class BertSequenceClassfier(nn.Module):
         self.fc_layer = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(in_features=bert_config.hidden_size,out_features=bert_config.hidden_size),
+            nn.ReLU(inplace=True),
             nn.Dropout(dropout),
             nn.Linear(bert_config.hidden_size,self.num_class)
         )

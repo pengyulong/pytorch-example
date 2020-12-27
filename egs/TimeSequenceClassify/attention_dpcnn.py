@@ -268,7 +268,7 @@ class Job:
             train_data), batch_size=self.batch_size, shuffle=False, num_workers=0, collate_fn=default_collate, drop_last=False)
 
         valid_dataloader = DataLoader(
-            dataset=valid_data, batch_size=self.batch_size, shuffle=False, num_workers=0, drop_last=False)
+            dataset=valid_data, batch_size=self.batch_size, shuffle=True, num_workers=0, drop_last=False)
         model = SequenceClassify(out_channels=self.out_channels, num_class=self.num_class,
                                  hidden_num=self.hidden_num, seq_lengths=self.seq_lengths)
         model.to(device=self.device)

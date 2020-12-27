@@ -10,3 +10,4 @@ egs/TextClassify/model
 egs/TextClassify/utils
 egs/TextClassify/TilteClassify/*
 egs/TextClassify/location_traffic_convenience/*
+egs/Regression/data2.xlsx
