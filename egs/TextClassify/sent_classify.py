@@ -55,20 +55,22 @@ class SentimentData(Dataset):
 class Job:
     def __init__(self):
         self.device = get_device()
-        self.batch_size = 64
+        self.batch_size = 32
         self.epoches = 5
         self.lr = 2e-5
         self.num_class = 4
         self.sent_class = r"location_traffic_convenience"
-        self.train_file = r"data/train.txt"
-        self.valid_file = r"data/valid.txt"
+        self.train_file = r"data/train.csv"
+        self.valid_file = r"data/valid.csv"
         self.train_pkl_file = r"data/train.pkl"
         self.valid_pkl_file = r"data/valid.pkl"
-        self.max_length = 510
+        self.max_length = 500
         self.warmup_ratio = 0.1
         self.pool_type = "avg" # avg,max,cls
 
-        self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
+        # self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
+        # self.pretrained_name = "hfl/chinese-bert-wwm-ext"
+        self.pretrained_name = "voidful/albert_chinese_small"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.albert_model = BertModel.from_pretrained(self.pretrained_name)
