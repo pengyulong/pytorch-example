@@ -2,7 +2,7 @@
 __pycach__/
 egs/TimeSequenceClassify/train_data/
 egs/TimeSequenceClassify/result*/
-egs/TimeSequenceClassify/model/__pycach__/
+egs/TimeSequenceClassify/model/__pycach__/*
 egs/TimeSequenceClassify/train_data/
 egs/TextClassify/data2/
 egs/TextClassify/data
@@ -11,3 +11,5 @@ egs/TextClassify/utils
 egs/TextClassify/TilteClassify/*
 egs/TextClassify/location_traffic_convenience/*
 egs/Regression/data2.xlsx
+utils/__pycach__/*
+model/__pycach__/*
