@@ -55,27 +55,28 @@ class SentimentData(Dataset):
 class Job:
     def __init__(self):
         self.device = get_device()
-        self.batch_size = 32
+        self.batch_size = 8
         self.epoches = 5
         self.lr = 2e-5
         self.num_class = 4
         self.sent_class = r"location_traffic_convenience"
         self.train_file = r"data/train.csv"
         self.valid_file = r"data/valid.csv"
-        self.train_pkl_file = r"data/train.pkl"
-        self.valid_pkl_file = r"data/valid.pkl"
         self.max_length = 500
         self.warmup_ratio = 0.1
-        self.pool_type = "avg" # avg,max,cls
-
-        self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
-        # self.pretrained_name = "hfl/chinese-bert-wwm-ext"
+        self.pool_type = "max" # avg,max,cls 
+        self.model_dir = "./{}/{}".format(self.sent_class,self.pool_type)
+        if os.path.exists(self.model_dir) == False:
+            os.makedirs(self.model_dir)
+        self.train_pkl_file = os.path.join(self.sent_class,"train.pkl")
+        self.valid_pkl_file = os.path.join(self.sent_class,"valid.pkl")
+        # self.pretrained_name = "hfl/chinese-roberta-wwm-ext-large"
+        self.pretrained_name = "hfl/chinese-roberta-wwm-ext"
         # self.pretrained_name = "voidful/albert_chinese_small"
         self.albert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.albert_model = BertModel.from_pretrained(self.pretrained_name)
         self.albert_config = BertConfig.from_pretrained(self.pretrained_name)
-
         if os.path.isfile(self.train_pkl_file):
             with open(self.train_pkl_file,"rb") as f:
                 self.train_dataset = pickle.load(f)
@@ -87,13 +88,9 @@ class Job:
             with open(self.valid_pkl_file,"rb") as f:
                 self.valid_dataset = pickle.load(f)
         else:
+            self.valid_dataset = SentimentData.from_csv(self.valid_file,self.albert_tokenizer,self.sent_class,self.max_length)
             with open(self.valid_pkl_file,"wb") as f:
-                self.valid_dataset = SentimentData.from_csv(self.valid_file,self.albert_tokenizer,self.sent_class,self.max_length)
                 pickle.dump(self.valid_dataset,f)
-
-        self.model_dir = "./{}".format(self.sent_class)
-        if os.path.exists(self.model_dir) == False:
-            os.mkdir(self.model_dir)
         self.log_file = set_logger(
             os.path.join(self.model_dir, "train.log"))
 
@@ -141,4 +138,4 @@ class Job:
 if __name__ == "__main__":
     job = Job()
     job.train()
-    job.predict()
+    #job.predict()

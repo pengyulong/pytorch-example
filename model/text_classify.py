@@ -35,7 +35,7 @@ class BertSequenceClassfier(nn.Module):
         if self.pool_type == 'avg':
             self.pool_layer = nn.AdaptiveAvgPool1d(1)
         if self.pool_type == 'max':
-            self.pool_type = nn.AdaptiveMaxPool1d(1)
+            self.pool_layer = nn.AdaptiveMaxPool1d(1)
         self.fc_layer = nn.Sequential(
             nn.Dropout(dropout),
             nn.Linear(in_features=bert_config.hidden_size,out_features=bert_config.hidden_size),
