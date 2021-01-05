@@ -52,19 +52,29 @@ class SentimentData(Dataset):
         return cls(dataX, dataY)
 
 
+def save_prob_file(probs,y_true,filename):
+    test_prob=pd.DataFrame(probs)
+    num_outputs = len(probs[0])
+    test_id = [i for i in range(len(probs))]
+    test_prob.columns=["class_prob_%s"%i for i in range(1,num_outputs+1)]
+    test_prob['id']=list(test_id)
+    test_prob['y_true'] = y_true
+    test_prob.to_csv(filename,index=None)
+    return True
+
 class Job:
-    def __init__(self):
+    def __init__(self,sent_class,pool_type):
         self.device = get_device()
-        self.batch_size = 8
-        self.epoches = 5
+        self.batch_size = 128
+        self.epoches = 1
         self.lr = 2e-5
         self.num_class = 4
-        self.sent_class = r"location_traffic_convenience"
+        self.sent_class = sent_class
         self.train_file = r"data/train.csv"
         self.valid_file = r"data/valid.csv"
-        self.max_length = 500
+        self.max_length = 100
         self.warmup_ratio = 0.1
-        self.pool_type = "max" # avg,max,cls 
+        self.pool_type = pool_type # avg,max,cls 
         self.model_dir = "./{}/{}".format(self.sent_class,self.pool_type)
         if os.path.exists(self.model_dir) == False:
             os.makedirs(self.model_dir)
@@ -112,30 +122,29 @@ class Job:
         save_dict_to_json(curr_hyp, os.path.join(
             self.model_dir, "train_hyp.json"))
 
+
     def predict(self):
         valid_dataloader = DataLoader(dataset=self.valid_dataset, batch_size=len(
             self.valid_dataset), shuffle=False, num_workers=0, drop_last=False)
         model = BertSequenceClassfier(self.albert_model,self.albert_tokenizer,self.albert_config,num_class=self.num_class,pool_type=self.pool_type)
         load_checkpoint(os.path.join(
             self.model_dir, "best.pth.tar"), model)
-        # model.to(device=self.device)
+        model.to(device=self.device)
         model.eval()
         y_preds, y_trues = [], []
-        for data in valid_dataloader:
-            inputX, inputY = data
-            # inputX = inputX.to(self.device)
-            inputY = inputY.to(self.device)
-            y_pred = np.argmax(
-                model(inputX).data.cpu().numpy(), axis=1).squeeze()
-            y_true = inputY.data.cpu().numpy().squeeze()
-            y_preds.extend(y_pred.tolist())
-            y_trues.extend(y_true.tolist())
-        result = pd.DataFrame(
-            data={'y_true': y_trues, 'y_pred': y_preds}, index=range(len(y_preds)))
-        result.to_csv(r"{}/result.csv".format(self.model_dir))
+        with torch.no_grad():
+            for data in valid_dataloader:
+                inputX, inputY = data
+                inputY = inputY.to(self.device)
+                y_pred = model(inputX).detach().cpu().numpy().squeeze()
+                y_true = inputY.detach().cpu().numpy().squeeze()
+                y_preds.extend(y_pred.tolist())
+                y_trues.extend(y_true.tolist())
+
+        save_prob_file(y_preds,y_trues,os.path.join(self.sent_class,"result_{}.csv".format(self.pool_type)))
 
 
 if __name__ == "__main__":
-    job = Job()
-    job.train()
-    #job.predict()
+    job = Job("location_traffic_convenience","max")
+    # job.train()
+    job.predict()
