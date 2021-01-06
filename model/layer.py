@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 
 class TextCNN(nn.Module):
-    def __init__(self, kernel_sizes, num_channels, embed_size, hidden_size, num_class, dropout=0.2):
+    def __init__(self, kernel_sizes, num_channels, embed_size, num_class, dropout=0.2):
         super(TextCNN,self).__init__()
-        self.ngrams = ngrams
-        self.filters = filters
         self.embed_size = embed_size
-        self.encoder_layers = []
-        for kernel,channel in zip(kernel_sizes,num_channels):
+        self.kernel_sizes = kernel_sizes
+        self.num_channels = num_channels
+        self.num_class = num_class
+        self.encoder_layers = nn.ModuleList()
+        for kernel,channel in zip(self.kernel_sizes,self.num_channels):
             self.encoder_layers.append(
                 nn.Sequential(
                     nn.Conv1d(in_channels=self.embed_size,out_channels=channel,kernel_size=kernel),
@@ -18,10 +19,11 @@ class TextCNN(nn.Module):
                 )
             )
         self.fc_layer = nn.Sequential(
-            nn.Linear(in_features=sum(num_channels),out_features=hidden_size),
+            nn.Linear(in_features=sum(self.num_channels),out_features=256),
             nn.ReLU(inplace=True),
-            nn.Linear(in_features=hidden_size,out_features=num_class),
-            nn.Dropout(p=dropout)
+            nn.Linear(in_features=256,out_features=num_class),
+            nn.Dropout(p=dropout),
+            nn.Softmax(dim=1)
         )
     
     def forward(self,inputs):
@@ -44,7 +46,7 @@ class BiGru(nn.Module):
 
         self.encoder = nn.GRU(input_size=self.embed_size,hidden_size=self.hidden_size,bidirectional=True,batch_first=True,num_layers=self.num_layers)
 
-        self.fc_layer = nn.Sequential(nn.Linear(self.hidden_size*2,self.hidden_size),nn.ReLU(inplace=True),nn.Linear(self.hidden_size,self.n_class))
+        self.fc_layer = nn.Sequential(nn.Linear(self.hidden_size*2,self.hidden_size),nn.ReLU(inplace=True),nn.Linear(self.hidden_size,self.num_class),nn.Softmax(dim=1))
 
     def forward(self,inputs):
         assert inputs.shape[2] == self.embed_size

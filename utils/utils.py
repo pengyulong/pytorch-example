@@ -335,10 +335,10 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
     for epoch in range(epochs):
 
         logging.info("Epoch {}/{}".format(epoch+1, epochs))
-        train_metrics = train(model, optimizer, loss_func, train_dataloader, metrics, lr_scheduler)
-        val_metrics = evaluate(model, loss_func, val_dataloader, metrics)
-        train_loss_list.append(train_metrics)
-        val_loss_list.append(val_metrics)
+        train_loss,train_metrics = train(model, optimizer, loss_func, train_dataloader, metrics, lr_scheduler)
+        val_loss,val_metrics = evaluate(model, loss_func, val_dataloader, metrics)
+        train_loss_list.extend(train_loss)
+        val_loss_list.extend(val_loss)
         
         val_losses.append(val_metrics['loss'])
         val_f1 = val_metrics['f1']
@@ -393,7 +393,7 @@ def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
             optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
-            if step % 50 == 0:
+            if step % 200 == 0:
                 output_batch = output_batch.detach().cpu().numpy()
                 label_batch = label_batch.detach().cpu().numpy()
                 summary_batch = {metric: metrics[metric](output_batch, label_batch) for metric in metrics}
@@ -408,7 +408,7 @@ def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler=None):
                                 for k, v in metrics_mean.items())
     logging.info("- Train metrics: "+metrics_string)
 
-    return metrics_mean
+    return summ,metrics_mean
 
 
 def evaluate(model, loss_func, dataloader, metrics):
@@ -442,4 +442,4 @@ def evaluate(model, loss_func, dataloader, metrics):
     metrics_string = " ; ".join("{}: {:05.3f}".format(k, v)
                                 for k, v in metrics_mean.items())
     logging.info("- Eval metrics : " + metrics_string)
-    return metrics_mean
+    return summ,metrics_mean
