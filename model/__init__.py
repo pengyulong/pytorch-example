@@ -2,4 +2,5 @@
 __version__ = "0.0.1dev"
 from .TSC import SequenceClassify
 from .text_classify import BertClassfier,BertSequenceClassfier
+from .text_classify import BertEncoderClassfier
 
