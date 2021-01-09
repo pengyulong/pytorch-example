@@ -142,7 +142,7 @@ class Job:
             dataset=self.valid_dataset, batch_size=self.batch_size, shuffle=True, num_workers=0, drop_last=False)
 
         if self.pool_type in ['rnn','cnn']:
-            model = BertEncoderClassfier(self.albert_model,self.albert_tokenizer,self.num_class,self.bert_config,self.pool_type)
+            model = BertEncoderClassfier(self.albert_model,self.albert_tokenizer,self.num_class,self.albert_config,self.pool_type)
         else:
             model = BertSequenceClassfier(self.albert_model,self.albert_tokenizer,self.albert_config,num_class=self.num_class,pool_type=self.pool_type)
 

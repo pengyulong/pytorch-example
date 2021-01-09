@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 import torch
 from tqdm import tqdm
 from utils import text_filter
+from transformers import BertTokenizer
 
 matplotlib.use("Agg")
 
@@ -35,7 +36,8 @@ class SentimentData(Dataset):
         dataSet['content'] = dataSet['content'].apply(text_filter)
         dataX, dataY = [], []
         for (_, row) in tqdm(dataSet.iterrows()):
-            content = text_filter(row['content'])
+            content = row['content']
+            # content = text_filter(row['content'])
             tokens = tokenizer.tokenize(content)
             if len(tokens) >= max_length:
                 continue
@@ -85,25 +87,41 @@ def draw_figure(train_data,valid_data,model_dir,variable):
     plt.tight_layout()
     fig.savefig(os.path.join(model_dir,"{}.png".format(variable)),bbox_inches='tight',dpi=300)
 
+def dataSet_info(csvfile,tokenizer):
+    dataSet = pd.read_csv(csvfile, index_col=0)
+    dataSet['content'] = dataSet['content'].apply(text_filter)
+    lengths = [len(tokenizer.tokenize(text)) for text in dataSet['content']]
+    fig = plt.figure()
+    plt.hist(lengths,bins=50,normed=1,facecolor='blue',edgecolor='black')
+    plt.xlabel("文本长度")
+    plt.ylabel("比例")
+    plt.title("文本长度分布直方图")
+    fig.savefig("length_ratio.png",bbox_inches='tight',dpi=300)
+
+
 
 if __name__ == "__main__":
-    sent_classes = ['location_traffic_convenience']
-    # sent_classes = ["location_distance_from_business_district","location_easy_to_find","price_cost_effective","location_traffic_convenience","location_distance_from_business_district","others_willing_to_consume_again","service_parking_convenience"]
-    model_names = ['avg','max','CLS','out','cnn','rnn']
+    csvfile = r'data/train.csv'
+    pretrained_name = "hfl/chinese-roberta-wwm-ext"
+    albert_tokenizer = BertTokenizer.from_pretrained(pretrained_name)
 
-    for sent_class in sent_classes:
-        for pool_type in model_names:
-            model_dir = os.path.join(sent_class,pool_type)
-            logfile = os.path.join(model_dir,"train.log")
-            if os.path.exists(logfile) == False:
-                print("开始训练{}情感分类,模型为:{}".format(sent_class,pool_type))
-                job = Job(sent_class,pool_type)
-                job.train()
-                job.predict()
-            train_data,valid_data = load_loss(logfile)
-            print("训练{}情感分类完毕,开始画图".format(sent_class,pool_type))
-            for var in ['f1','acc','recall','precision','loss']:
-                draw_figure(train_data,valid_data,model_dir,var)
+    # sent_classes = ['location_traffic_convenience']
+    # # sent_classes = ["location_distance_from_business_district","location_easy_to_find","price_cost_effective","location_traffic_convenience","location_distance_from_business_district","others_willing_to_consume_again","service_parking_convenience"]
+    # model_names = ['avg','max','CLS','out','cnn','rnn']
+
+    # for sent_class in sent_classes:
+    #     for pool_type in model_names:
+    #         model_dir = os.path.join(sent_class,pool_type)
+    #         logfile = os.path.join(model_dir,"train.log")
+    #         if os.path.exists(logfile) == False:
+    #             print("开始训练{}情感分类,模型为:{}".format(sent_class,pool_type))
+    #             job = Job(sent_class,pool_type)
+    #             job.train()
+    #             job.predict()
+    #         train_data,valid_data = load_loss(logfile)
+    #         print("训练{}情感分类完毕,开始画图".format(sent_class,pool_type))
+    #         for var in ['f1','acc','recall','precision','loss']:
+    #             draw_figure(train_data,valid_data,model_dir,var)
 
 
                 
