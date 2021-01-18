@@ -24,35 +24,30 @@ from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from nltk.tokenize import word_tokenize
 from torchsummary import summary
 
-tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base')
+tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base',is_split_into_words=True)
 model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 # model = BertModel.from_pretrained("./model")
 
 utils.setup_seed(2020)
 
-
-def process_sentence(sentence, target, window_size, start, end):
+def process_sentence(sentence,start,end):
+    target = sentence[start:end]
     prev = sentence[:start]
-    if sentence[end] == 's':  # 如果是复数形式的化,字符串后移一位
-        end += 1
-    post = sentence[end:]
-    token_list = []
-    prev_list = word_tokenize(prev)
-    post_list = word_tokenize(post)
-    if window_size > 0:
-        if not prev_list:
-            token_list.append(" ")
-        token_list.extend(prev_list[max(0, len(prev_list)-window_size):])
-        token_list.append(target)
-        token_list.extend(post_list[:min(window_size, len(post_list))])
+    target_token = tokenizer.tokenize(target)
+    if target_token[0] == '▁':
+        target_token_len = len(target_token) - 1
     else:
-        if not prev_list:
-            token_list.append(" ")
-        token_list.extend(prev_list)
-        token_list.append(target)
-        token_list.extend(post_list)
-    return " ".join(token_list)
+        target_token_len = len(target_token)
+    # target_token_len = len(bert_tokenizer.tokenize(target))
+    npos = len(tokenizer.tokenize(prev))
+    token_list = list(range(npos+1,npos+target_token_len+1))
+    return token_list
+
+def load_json(json_file):
+    with codecs.open(json_file, 'r', encoding='utf-8') as f:
+        data_list = json.load(f)
+    return data_list
 
 
 def load_json(json_file):
@@ -62,6 +57,21 @@ def load_json(json_file):
 
 
 def load_dataSet(text_json, label_json, window_size):
+    """加载text_json和label_json
+    """
+    dataX, dataY = [], []
+    text_list, label_list = load_json(text_json), load_json(label_json)
+    for text, label in tqdm(zip(text_list, label_list)):
+        text1, text2 = text['sentence1'], text['sentence2']
+        start1, end1 = int(text['start1']), int(text['end1'])
+        start2, end2 = int(text['start2']), int(text['end2'])
+        tag, word = label['tag'], text['lemma']
+        dataY.append(1 if tag == 'T' else 0)
+        dataX.append([text1, text2, start1, end1, start2, end2])
+    return dataX, dataY
+
+
+def load_dataSet2(text_json, label_json, window_size):
     """加载text_json和label_json
     """
     dataX, dataY = [], []
@@ -91,32 +101,39 @@ def split_dataSet(text_json, label_json, window_size):
 
 
 class MyData(Dataset):
-    def __init__(self, sentences1, sentences2, lemmas, labels):
+    def __init__(self, sentences1,sentences2,starts1,ends1,starts2,ends2,labels):
         self.sentence1 = sentences1
         self.sentence2 = sentences2
-        self.lemmas = lemmas
+        self.starts1 = starts1
+        self.ends1 = ends1
+        self.starts2 = starts2
+        self.ends2 = ends2
         self.labels = torch.LongTensor(labels)
 
     def __len__(self):
         return len(self.labels)
 
     def __getitem__(self, index):
-        return self.sentence1[index], self.sentence2[index], self.lemmas[index], self.labels[index]
+        return self.sentence1[index], self.starts1[index], self.ends1[index],self.sentence2[index], self.starts2[index],self.ends2[index], self.labels[index]
 
     @classmethod
-    def from_list(cls, inputs, target):
-        sentence1, sentence2, lemmas, labels = [], [], [], []
+    def from_list(cls,inputs,target):
+        sentence1, sentence2, starts1,ends1,starts2,ends2,labels = [], [], [], [], [], [], []
         for dataX, dataY in zip(inputs, target):
-            s1, s2, word = dataX
-            sentence1.append(s1)
-            sentence2.append(s2)
-            lemmas.append(word)
+            text1, text2, start1, end1, start2, end2 = dataX
+            sentence1.append(text1)
+            sentence2.append(text2)
+            starts1.append(start1)
+            ends1.append(end1)
+            starts2.append(start2)
+            ends2.append(end2)
             labels.append(dataY)
-        return cls(sentence1, sentence2, lemmas, labels)
+        return cls(sentence1, sentence2, starts1, ends1, starts2, ends2, labels)
+
 
 
 class WordDisambiguationNet(nn.Module):
-    def __init__(self, bert_model, bert_tokenizer, in_features, nhead=1, num_layers=1, num_class=2, dropout=0.5):
+    def __init__(self, bert_model, bert_tokenizer, in_features, nhead=1, num_layers=1, num_class=2):
         super(WordDisambiguationNet, self).__init__()
         self.num_class = num_class
         self.nhead = nhead
@@ -127,32 +144,17 @@ class WordDisambiguationNet(nn.Module):
         self.encoder_layer = nn.TransformerEncoder(nn.TransformerEncoderLayer(
             d_model=self.in_features, nhead=self.nhead), num_layers=self.num_layers)
         self.sim = nn.CosineSimilarity(dim=1)
-        self.dropout = dropout
-        if self.dropout < 0:
-            self.fc_layer = nn.Sequential(
-                nn.Linear(in_features=2, out_features=self.num_class),
-                nn.BatchNorm1d(num_features=self.num_class),
-                nn.ReLU(inplace=True)
-                # nn.Softmax(dim=1)
-            )
-        else:
-            self.fc_layer = nn.Sequential(
-                nn.Linear(in_features=2, out_features=self.num_class),
-                nn.BatchNorm1d(num_features=self.num_class),
-                nn.ReLU(inplace=True),
-                # nn.Softmax(dim=1),
-                nn.Dropout(p=self.dropout)
-            )
+        self.fc_layer = nn.Sequential(
+            nn.Linear(in_features=2, out_features=self.num_class),
+            nn.BatchNorm1d(num_features=self.num_class),
+            nn.Sigmoid()
+        )
         self.avgpool = nn.AvgPool1d(2)
 
-    def forward(self, sentences1, sentences2, lemmas):
-        vec1 = self._select_embedding(
-            sentences1, lemmas).to(utils.get_device())
-        # print("v1's shape:{}".format(vec1.shape))
-        vec2 = self._select_embedding(
-            sentences2, lemmas).to(utils.get_device())
-        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2),
-                           dim=1).to(utils.get_device())
+    def forward(self, sentences1,start1,end1,sentences2,start2,end2):
+        vec1 = self._select_embedding(sentences1,start1,end1)
+        vec2 = self._select_embedding(sentences2,start2,end2)
+        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2),dim=1)
         output = self.encoder_layer(concat)
         output = output.permute(0, 2, 1)
         output = self.avgpool(output)
@@ -162,26 +164,15 @@ class WordDisambiguationNet(nn.Module):
         out = torch.cat((out1, out2), dim=1)
         return self.fc_layer(out)
 
-    def _select_embedding(self, sentences, lemmas):
-        encoder_inputs = self.bert_tokenizer(
-            sentences, return_tensors='pt', padding=True)
-        encoder_inputs.to(utils.get_device())
+    def _select_embedding(self,sentences,starts,ends):
+        encoder_inputs = self.bert_tokenizer(sentences,return_tensors='pt',padding=True).to(utils.get_device())
         output = self.bert_model(**encoder_inputs)
-        token_embedding = torch.zeros(len(lemmas), self.in_features)
-        for i, lemma in enumerate(lemmas):
-            token_ids = self.bert_tokenizer.encode(" "+lemma)[1:-1]
-            sentence_ids = encoder_inputs['input_ids'][i].cpu(
-            ).numpy().tolist()
-            try:
-                slice_ids = [sentence_ids.index(token_id)
-                             for token_id in token_ids]
-            except Exception as err:
-                print(err)
-                print("sentence:{}".format(sentences[i]))
-                print("sentence ids:{}".format(sentence_ids))
-                print("lemma:{},token_id:{}".format(lemma, token_ids))
-            token_embedding[i] = output[0][i, slice_ids, :].mean(dim=0)
-        return token_embedding.unsqueeze(1)
+        lemma_embedings = torch.zeros(len(sentences),self.in_features).to(utils.get_device())
+        for i,(start, end) in enumerate(zip(starts,ends)):
+            lemma_ids = process_sentence(sentences[i],start,end)
+            lemma_embedings[i] = output[0][i,lemma_ids,:].mean(dim=0)
+        return lemma_embedings.unsqueeze(1)
+
 
 
 def evaluate(model, loss_func, dataloader, metrics):
@@ -198,9 +189,9 @@ def evaluate(model, loss_func, dataloader, metrics):
     device = utils.get_device()
     with torch.no_grad():
         for data in dataloader:
-            sentences1, sentences2, lemmas, inputY = data
+            sentences1, starts1, ends1, sentences2, starts2, ends2, inputY = data
             inputY = inputY.to(device)
-            output_batch = model(sentences1, sentences2, lemmas)
+            output_batch = model(sentences1, starts1, ends1, sentences2, starts2, ends2)
             loss = loss_func(output_batch, inputY)
             output_batch = output_batch.data.cpu().numpy()
             inputY = inputY.data.cpu().numpy()
@@ -232,9 +223,9 @@ def train(model, optimizer, loss_func, dataloader, metrics, lr_scheduler):
     loss_avg = utils.RunningAverage()
     with tqdm(total=len(dataloader)) as t:
         for i, batch_data in enumerate(dataloader):
-            sentences1, sentences2, lemmas, inputY = batch_data
+            sentences1, starts1, ends1, sentences2, starts2, ends2, inputY = batch_data
             inputY = inputY.to(device)
-            output_batch = model(sentences1, sentences2, lemmas)
+            output_batch = model(sentences1, starts1, ends1, sentences2, starts2, ends2)
             loss = loss_func(output_batch, inputY)
             optimizer.zero_grad()
             loss.backward()
@@ -326,28 +317,20 @@ class Job:
         self.log_file = utils.set_logger("./train.log")
         self.device = utils.get_device()
         self.batch_size = 32
-        self.epoches = 100
+        self.epoches = 10
         self.lr = 5e-6
         self.bert_model = model
         self.bert_tokenizer = tokenizer
         self.text_json = r"data/training.en-en.data"
         self.label_json = r"data/training.en-en.gold"
         self.num_class = 2
-        self.dropout = -0.2
+        # self.dropout = -0.2
         self.in_features = 768
         self.window_size = 5
         self.loss_result = None
+        self.warm_ratio = 0.1
+        self.model_dir = "End2endXLMRoBertaNet_nochop"
 
-        if self.window_size < 0:
-            if self.dropout > 0:
-                self.model_dir = "End2endXLMRoBertaNet_nochop_withdropout"
-            else:
-                self.model_dir = "End2endXLMRoBertaNet_nochop_nodropout"
-        else:
-            if self.dropout > 0:
-                self.model_dir = "End2endXLMBertaNet_chop5_withdropout"
-            else:
-                self.model_dir = "End2endXLMBertaNet_chop5_nodropout"
 
     def train(self):
         self.trainX, self.trainY, self.testX, self.testY = split_dataSet(
@@ -360,7 +343,7 @@ class Job:
         valid_dataloader = DataLoader(
             dataset=valid_data, batch_size=(self.batch_size)//2, shuffle=False, num_workers=0, drop_last=False)
         model = WordDisambiguationNet(
-            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features, dropout=self.dropout)
+            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
         # summary(model,input_size=)
 
         model.to(device=self.device)
@@ -382,20 +365,20 @@ class Job:
 
         optimizer = torch.optim.SGD(
             [
-                {"params":model.bert_model.parameters(),"lr":1e-7},
+                {"params":model.bert_model.parameters(),"lr":4e-5},
                 {"params":base_params},
             ],
-            momentum=0.90,weight_decay=0.01,lr=0.001
+            momentum=0.95,weight_decay=0.01,lr=0.001
         )
         # optimizer = torch.optim.AdamW(
         #     optimizer_grouped_parameters, lr=self.lr, eps=1e-8)
 
         lr_scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=800, num_training_steps=self.epoches*len(train_dataloader))
+            optimizer, num_warmup_steps=self.warm_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
 
         criterion = nn.CrossEntropyLoss()
         self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer,
-                                              criterion, utils.metrics, self.epoches, self.model_dir, lr_scheduler, restore_file=None)
+                                              criterion, utils.classify_metrics, self.epoches, self.model_dir, lr_scheduler, restore_file=None)
         curr_hyp = {"epochs": self.epoches,
                     "batch_size": self.batch_size, "lr": self.lr}
         utils.save_dict_to_json(curr_hyp, os.path.join(

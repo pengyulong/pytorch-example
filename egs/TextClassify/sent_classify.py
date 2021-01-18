@@ -186,15 +186,19 @@ class Job:
 
 
 if __name__ == "__main__":
-    sent_classes = ["location_distance_from_business_district","location_easy_to_find","price_cost_effective","location_traffic_convenience","location_distance_from_business_district","others_willing_to_consume_again","service_parking_convenience"]
-    model_names = ['avg','max','CLS','out','cnn','rnn']
-    for sent_class in sent_classes:
-        for pool_type in model_names:
-            model_dir = os.path.join(sent_class,pool_type)
-            print("开始训练{}情感分类,模型为:{}".format(sent_class,pool_type))
-            job = Job(sent_class,pool_type)
-            job.train()
-            job.predict()
-            print("训练{}情感分类完毕,模型为:{},开始画图".format(sent_class,pool_type))
-            for var in ['f1','acc','recall','precision','loss']:
-                job.draw_figure(var)
+    sent_class = "location_distance_from_business_district"
+    pool_type = "CLS"
+    job = Job(sent_class,pool_type)
+    job.predict()
+    #sent_classes = ["location_distance_from_business_district","location_easy_to_find","price_cost_effective","location_traffic_convenience","location_distance_from_business_district","others_willing_to_consume_again","service_parking_convenience"]
+    #model_names = ['avg','max','CLS','out','cnn','rnn']
+    #for sent_class in sent_classes:
+        #for pool_type in model_names:
+            #model_dir = os.path.join(sent_class,pool_type)
+            #print("开始训练{}情感分类,模型为:{}".format(sent_class,pool_type))
+            #job = Job(sent_class,pool_type)
+            # job.train()
+            #job.predict()
+            #print("训练{}情感分类完毕,模型为:{},开始画图".format(sent_class,pool_type))
+            #for var in ['f1','acc','recall','precision','loss']:
+            #    job.draw_figure(var)

@@ -23,7 +23,7 @@ class SentimentData(Dataset):
         return self.data[index], self.label[index]
 
     @classmethod
-    def from_csv(cls, csvfile, tokenizer, sent_class, max_length=510):
+    def from_csv(cls, csvfile, tokenizer, sent_class, max_length=500):
         """
         sent_class由20个类别组成,分别是location_traffic_convenience,location_distance_from_business_district,
         location_easy_to_find,service_wait_time,service_waiters_attitude,service_parking_convenience,
@@ -90,20 +90,25 @@ def draw_figure(train_data,valid_data,model_dir,variable):
 def dataSet_info(csvfile,tokenizer):
     dataSet = pd.read_csv(csvfile, index_col=0)
     dataSet['content'] = dataSet['content'].apply(text_filter)
-    lengths = [len(tokenizer.tokenize(text)) for text in dataSet['content']]
+    lengths = [len(tokenizer.tokenize(text)) for text in tqdm(dataSet['content'])]
+    lengths = [a for a in lengths if a <= 500]
     fig = plt.figure()
-    plt.hist(lengths,bins=50,normed=1,facecolor='blue',edgecolor='black')
-    plt.xlabel("文本长度")
+    plt.hist(lengths,bins=50,density=True,facecolor='blue',edgecolor='black')
+    plt.xlabel("训练集文本长度")
     plt.ylabel("比例")
     plt.title("文本长度分布直方图")
     fig.savefig("length_ratio.png",bbox_inches='tight',dpi=300)
+    with open("data/test_text.csv",'w') as f:
+        for length in lengths:
+            f.write("{}\n".format(length))
 
 
 
 if __name__ == "__main__":
-    csvfile = r'data/train.csv'
+    csvfile = r'data/valid.csv'
     pretrained_name = "hfl/chinese-roberta-wwm-ext"
     albert_tokenizer = BertTokenizer.from_pretrained(pretrained_name)
+    dataSet_info(csvfile,albert_tokenizer)
 
     # sent_classes = ['location_traffic_convenience']
     # # sent_classes = ["location_distance_from_business_district","location_easy_to_find","price_cost_effective","location_traffic_convenience","location_distance_from_business_district","others_willing_to_consume_again","service_parking_convenience"]

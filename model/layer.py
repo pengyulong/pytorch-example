@@ -22,8 +22,7 @@ class TextCNN(nn.Module):
             nn.Linear(in_features=sum(self.num_channels),out_features=256),
             nn.ReLU(inplace=True),
             nn.Linear(in_features=256,out_features=num_class),
-            nn.Dropout(p=dropout),
-            nn.Softmax(dim=1)
+            nn.Dropout(p=dropout)
         )
     
     def forward(self,inputs):
@@ -46,7 +45,7 @@ class BiGru(nn.Module):
 
         self.encoder = nn.GRU(input_size=self.embed_size,hidden_size=self.hidden_size,bidirectional=True,batch_first=True,num_layers=self.num_layers)
 
-        self.fc_layer = nn.Sequential(nn.Linear(self.hidden_size*2,self.hidden_size),nn.ReLU(inplace=True),nn.Linear(self.hidden_size,self.num_class),nn.Softmax(dim=1))
+        self.fc_layer = nn.Sequential(nn.Linear(self.hidden_size*2,self.hidden_size),nn.ReLU(inplace=True),nn.Linear(self.hidden_size,self.num_class))
 
     def forward(self,inputs):
         assert inputs.shape[2] == self.embed_size

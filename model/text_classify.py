@@ -41,8 +41,7 @@ class BertSequenceClassfier(nn.Module):
             nn.Linear(in_features=bert_config.hidden_size,out_features=bert_config.hidden_size),
             nn.ReLU(inplace=True),
             nn.Dropout(dropout),
-            nn.Linear(bert_config.hidden_size,self.num_class),
-            nn.Softmax(dim=1)
+            nn.Linear(bert_config.hidden_size,self.num_class)
         )
     def forward(self, inputs):
         encoder_inputs = self.bert_tokenizer(inputs,return_tensors='pt',padding=True)

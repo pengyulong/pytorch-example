@@ -168,6 +168,6 @@ class Job:
 
 if __name__ == "__main__":
     job = Job()
-    job.train()
+    # job.train()
     job.predict()
     job.plot_loss()
