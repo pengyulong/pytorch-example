@@ -29,8 +29,6 @@ bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 # model = BertModel.from_pretrained("./model")
 
-utils.setup_seed(2020)
-
 def load_json(json_file):
     with codecs.open(json_file, 'r', encoding='utf-8') as f:
         data_list = json.load(f)
@@ -337,7 +335,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
 
 
 class Job:
-    def __init__(self):
+    def __init__(self,seed):
         self.log_file = utils.set_logger("./train.log")
         self.device = utils.get_device()
         self.batch_size = 32
@@ -345,15 +343,19 @@ class Job:
         self.lr = 5e-6
         self.bert_model = bert_model
         self.bert_tokenizer = bert_tokenizer
-        self.text_json = r"data/training.en-en.data"
-        self.label_json = r"data/training.en-en.gold"
+        self.train_text_json = r"dataset/training/training.en-en.data"
+        self.train_label_json = r"dataset/training/training.en-en.gold"
+        self.valid_text_json = r"dataset/dev/multilingual/dev.en-en.data"
+        self.valid_label_json = r"dataset/dev/multilingual/dev.en-en.gold"
+        self.seed = seed
+
         self.num_class = 2
         # self.dropout = -0.2
         self.in_features = 768
-        self.window_size = 5
         self.loss_result = None
         self.warm_ratio = 0.1
-        self.model_dir = "End2endXLMRoBertaNet_nochop"
+        self.model_dir = "End2endXLMRoBertaNet_v2_{}".format(self.seed)
+        utils.setup_seed(seed)
 
     def few_shot_train(self):
         # text_json = r"dataset/trial/crosslingual/trial.en-ru.data"
@@ -422,11 +424,14 @@ class Job:
 
 
     def train(self):
-        self.trainX, self.trainY, self.testX, self.testY = split_dataSet(
-            self.text_json, self.label_json)
+        # self.trainX, self.trainY, self.testX, self.testY = split_dataSet(
+        #     self.text_json, self.label_json)
+        self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
+        self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
+
         train_data = MyData.from_list(self.trainX, self.trainY)
         # print("train_data:{}".format(train_data[0]))
-        valid_data = MyData.from_list(self.testX, self.testY)
+        valid_data = MyData.from_list(self.validX, self.validY)
         train_dataloader = DataLoader(dataset=train_data, sampler=RandomSampler(
             train_data), batch_size=self.batch_size, shuffle=False, num_workers=4, drop_last=False,collate_fn=collate_func,pin_memory=True)
 
@@ -541,9 +546,11 @@ class Job:
 
 
 if __name__ == "__main__":
-    job = Job()
+    for seed in [2021,43,26,48,78]:
+        job = Job(seed=seed)
+        job.train()
     # job.train()
-    job.evaluate()
-    # job.few_shot_train()
-    # job.predict()
+    # job.evaluate()
+    # # job.few_shot_train()
+    # # job.predict()
 
