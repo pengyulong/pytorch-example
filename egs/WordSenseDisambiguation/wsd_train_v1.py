@@ -156,22 +156,27 @@ class WordDisambiguationNet(nn.Module):
         self.bert_model = bert_model.to(utils.get_device())
         self.bert_tokenizer = bert_tokenizer
         self.tokenizer_type = tokenizer_type
-        self.encoder_layer = nn.TransformerEncoder(nn.TransformerEncoderLayer(
-            d_model=self.in_features, nhead=self.nhead), num_layers=self.num_layers)
-        self.sim = nn.CosineSimilarity(dim=1)
+        self.W = nn.Parameter(torch.Tensor(4,1))
+        nn.init.xavier_normal_(self.W) #初始化,必须添加
+
         self.fc_layer = nn.Sequential(
-            nn.Linear(in_features=2, out_features=self.num_class),
+            nn.Linear(in_features=in_features, out_features=self.num_class),
             nn.BatchNorm1d(num_features=self.num_class),
             nn.Sigmoid()
         )
-        self.avgpool = nn.AvgPool1d(2)
 
     def forward(self, sentences1,ranges1,sentences2,ranges2):
         # print("sentences")
-        cosine = self._get_similarity(sentences1,ranges1,sentences2,ranges2)
-        out1, out2 = cosine.unsqueeze(1), (1-cosine).unsqueeze(1)
-        out = torch.cat((out1, out2), dim=1)
-        return self.fc_layer(out)
+        vec1 = self._select_embedding(sentences1, ranges1)
+        vec2 = self._select_embedding(sentences2, ranges2)
+        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2),dim=1)
+        concat = concat.permute(0,2,1)
+        concat = concat.matmul(self.W).squeeze(2)
+        # print("concat's shape:{}".format(concat.shape))
+        output = self.fc_layer(concat)
+        return output
+
+  
 
     def _select_embedding(self,sentences,range_list):
         post_sentences, lemma_id_list = [], []
@@ -186,15 +191,7 @@ class WordDisambiguationNet(nn.Module):
             lemma_embedings[i] = output[0][i,lemma_id,:].mean(dim=0)
         return lemma_embedings.unsqueeze(1)
 
-    def _get_similarity(self,sentences1,ranges1,sentences2,ranges2):
-        vec1 = self._select_embedding(sentences1, ranges1)
-        vec2 = self._select_embedding(sentences2, ranges2)
-        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2),dim=1)
-        output = self.encoder_layer(concat)
-        output = output.permute(0, 2, 1)
-        output = self.avgpool(output)
-        cosine = self.sim(output[:, 0, :], output[:, 1, :])
-        return cosine
+        
 
 def evaluate(model, loss_func, dataloader, metrics):
     """Evaluate the model on `num_steps` batches.
@@ -354,7 +351,7 @@ class Job:
         self.in_features = 768
         self.loss_result = None
         self.warm_ratio = 0.1
-        self.model_dir = "End2endXLMRoBertaNet_v2_{}".format(self.seed)
+        self.model_dir = "End2endXLMRoBertaNet_v1_{}".format(self.seed)
         utils.setup_seed(seed)
 
     def few_shot_train(self):
@@ -445,7 +442,7 @@ class Job:
 
         optimizer = torch.optim.SGD(
             [
-                {"params":model.bert_model.parameters(),"lr":6e-5},
+                {"params":model.bert_model.parameters(),"lr":4e-5},
                 {"params":base_params},
             ],
             momentum=0.95,weight_decay=0.01,lr=0.001

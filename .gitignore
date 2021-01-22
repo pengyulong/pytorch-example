@@ -21,3 +21,4 @@ utils/__pycach__/*
 model/__pycach__/*
 egs/WordSenseDisambiguation/dataset/*
 egs/WordSenseDisambiguation/End2endXLMRoBertaNet_nochop/*
+egs/cvr/*.csv
