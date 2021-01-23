@@ -24,12 +24,12 @@ project_config = {
     'label': "consume_purchase",
     # 用户类特征
     'user_id_features': ['city', 'city_rank', 'device_name', 'device_size', 'career', 'gender', 'net_type', 'residence', 'emui_dev'],
-    'ad_id_features': ['task_id', 'adv_id', 'create_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name'],  # 广告类特征
+    'ad_id_features': ['task_id', 'adv_id', 'creat_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name'],  # 广告类特征
     # 连续类特征
     'continue_features': ['age', 'app_score', 'list_time', 'device_price', 'communication_onlinerate', 'communication_avgonline_30d'],
     # 稀疏类特征
     'sparse_features': ['city', 'communication_onlinerate', 'task_id', 'adv_id'],
-    'dense_features': ['city_rank', 'device_name', 'device_size', 'career', 'gender', 'net_type', 'residence', 'emui_dev', 'create_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name']  # 密集类特征
+    'dense_features': ['city_rank', 'device_name', 'device_size', 'career', 'gender', 'net_type', 'residence', 'emui_dev', 'creat_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name']  # 密集类特征
 }
 
 
@@ -39,7 +39,7 @@ def split_dataSet(inputX, target, test_size=0.2):
     return trainX, trainY, testX, testY
 
 
-def gbdt_select_features(trainX, trainY, validX, validY):
+def gbdt_select_features(trainX, trainY, validX, validY,prefix='gbdt_leaf_'):
     logging.info("开始训练树模型...")
     gbm = lgb.LGBMRegressor(objective='binary',
                             subsample=0.8,
@@ -61,7 +61,7 @@ def gbdt_select_features(trainX, trainY, validX, validY):
     logging.info('训练得到叶子数')
     gbdt_feats_train = model.predict(trainX, pred_leaf=True)
     gbdt_feats_valid = model.predict(validX, pred_leaf=True)
-    gbdt_feats_name = ['gbdt_leaf_' + str(i)
+    gbdt_feats_name = [prefix + str(i)
                        for i in range(gbdt_feats_train.shape[1])]
     df_train_gbdt_feats = pd.DataFrame(
         gbdt_feats_train, columns=gbdt_feats_name)
@@ -115,9 +115,8 @@ class CVRJob(object):
         trainX, trainY, testX, testY = split_dataSet(
             dataSet[user_id_features], dataSet[self.target])
         train_user_gbdt_feats, valid_user_gbdt_feats, user_gbdt_feats_name = gbdt_select_features(
-            trainX, trainY, testX, testY)
+            trainX, trainY, testX, testY,prefix='gbdt_user_leaf_')
         logging.info("gbdt 对user-id 选择的特征:{}".format(user_gbdt_feats_name))
-
         logging.info('开始对ad-ID类特征进行one-hot编码...')
         ad_id_features = []
         for col in self.ad_id_feature_names:
@@ -129,7 +128,7 @@ class CVRJob(object):
         trainX, trainY, testX, testY = split_dataSet(
             dataSet[ad_id_features], dataSet[self.target])
         train_ad_gbdt_feats, valid_ad_gbdt_feats, ad_gbdt_feats_name = gbdt_select_features(
-            trainX, trainY, testX, testY)
+            trainX, trainY, testX, testY,prefix='gbdt_ad_leaf_')
         logging.info("gbdt 对user-id 选择的特征:{}".format(ad_gbdt_feats_name))
         train_features = pd.concat(
             [trainX_continue_features, train_user_gbdt_feats, train_ad_gbdt_feats])
@@ -173,7 +172,7 @@ class CVRJob(object):
         trainX, trainY, testX, testY = split_dataSet(
             dataSet[sparse_features], dataSet[self.target])
         train_sparse_gbdt_feats, valid_sparse_gbdt_feats, sparse_gbdt_feats_name = gbdt_select_features(
-            trainX, trainY, testX, testY)
+            trainX, trainY, testX, testY,prefix='gbdt_sparse_leaf_')
         logging.info("gbdt 对稀疏类特征树选择的特征:{}".format(sparse_gbdt_feats_name))
 
         logging.info('开始对密集类特征进行one-hot编码...')
@@ -187,7 +186,7 @@ class CVRJob(object):
         trainX, trainY, testX, testY = split_dataSet(
             dataSet[dense_features], dataSet[self.target])
         train_dense_gbdt_feats, valid_dense_gbdt_feats, dense_gbdt_feats_name = gbdt_select_features(
-            trainX, trainY, testX, testY)
+            trainX, trainY, testX, testY,prefix='gbdt_dense_leaf_')
         logging.info("gbdt 对密集类选择的特征:{}".format(dense_gbdt_feats_name))
 
         train_features = pd.concat(
