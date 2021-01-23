@@ -33,32 +33,41 @@ project_config = {
 }
 
 
-def gbdt_select_features(trainX,trainY,validX,validY):
+def split_dataSet(inputX, target, test_size=0.2):
+    trainX, testX, trainY, testY = train_test_split(
+        inputX, target, test_size=test_size, random_state=0)
+    return trainX, trainY, testX, testY
+
+
+def gbdt_select_features(trainX, trainY, validX, validY):
     logging.info("开始训练树模型...")
     gbm = lgb.LGBMRegressor(objective='binary',
-                            subsample= 0.8,
-                            min_child_weight= 0.5,
-                            colsample_bytree= 0.7,
+                            subsample=0.8,
+                            min_child_weight=0.5,
+                            colsample_bytree=0.7,
                             num_leaves=100,
-                            max_depth = 12,
+                            max_depth=12,
                             learning_rate=0.05,
                             n_estimators=10,
                             )
 
-    gbm.fit(trainX,trainY,
-        eval_set = [(trainX, trainY), (validX,validY)],
-        eval_names = ['train', 'val'],
-        eval_metric = 'binary_logloss',
-        early_stopping_rounds = 100
-    )
+    gbm.fit(trainX, trainY,
+            eval_set=[(trainX, trainY), (validX, validY)],
+            eval_names=['train', 'val'],
+            eval_metric='binary_logloss',
+            early_stopping_rounds=100
+            )
     model = gbm.booster_
     logging.info('训练得到叶子数')
-    gbdt_feats_train = model.predict(trainX, pred_leaf = True)
-    gbdt_feats_valid = model.predict(validX, pred_leaf = True)
-    gbdt_feats_name = ['gbdt_leaf_' + str(i) for i in range(gbdt_feats_train.shape[1])]
-    df_train_gbdt_feats = pd.DataFrame(gbdt_feats_train, columns = gbdt_feats_name) 
-    df_test_gbdt_feats = pd.DataFrame(gbdt_feats_valid, columns = gbdt_feats_name)
-    return df_train_gbdt_feats,df_test_gbdt_feats,gbdt_feats_name
+    gbdt_feats_train = model.predict(trainX, pred_leaf=True)
+    gbdt_feats_valid = model.predict(validX, pred_leaf=True)
+    gbdt_feats_name = ['gbdt_leaf_' + str(i)
+                       for i in range(gbdt_feats_train.shape[1])]
+    df_train_gbdt_feats = pd.DataFrame(
+        gbdt_feats_train, columns=gbdt_feats_name)
+    df_test_gbdt_feats = pd.DataFrame(
+        gbdt_feats_valid, columns=gbdt_feats_name)
+    return df_train_gbdt_feats, df_test_gbdt_feats, gbdt_feats_name
 
 
 class CVRJob(object):
@@ -75,28 +84,46 @@ class CVRJob(object):
         #     ['label', 'consume_purchase'], axis=1), self.dataSet[self.target], test_size=0.2, random_state=0)
         self.log_file = set_logger("./train.log")
 
-
     def gbdt_lr_cvr_task1(self):
         """
         用户ID类特征和广告ID类特征构建树模型:
         """
         # 加载数据
-        dataSet = pd.read_csv(self.csvfile,sep='|')
+        dataSet = pd.read_csv(self.csvfile, sep='|')
         # 归一化
         logging.info('开始对连续特征归一化...')
         scaler = MinMaxScaler()
         for col in self.continue_feature_names:
-            dataSet[col] = scaler.fit_transform(dataSet[col].values.reshape(-1, 1))
+            dataSet[col] = scaler.fit_transform(
+                dataSet[col].values.reshape(-1, 1))
+
+        # trainX, trainY, testX, testY
+
+        trainX_continue_features, trainY, testX_continue_features, testY = split_dataSet(
+            dataSet[self.continue_feature_names], dataSet[self.target])
+
         logging.info('归一化结束')
         # one-hot 编码
-        logging.info('开始对ID类特征进行one-hot编码...')
+        logging.info('开始对user-ID类特征进行one-hot编码...')
         for col in self.user_id_feature_names:
-            onehot_feats = pd.get_dummies(dataSet[col], prefix = col)
-            dataSet.drop([col], axis = 1, inplace = True)
-            dataSet = pd.concat([dataSet, onehot_feats], axis = 1)
-        logging.info('ID类特征one-hot编码结束...')
+            onehot_feats = pd.get_dummies(dataSet[col], prefix=col)
+            dataSet.drop([col], axis=1, inplace=True)
+            dataSet = pd.concat([dataSet, onehot_feats], axis=1)
+        logging.info('user-ID类特征one-hot编码结束...')
+        trainX, trainY, testX, testY = split_dataSet(
+            dataSet[self.user_id_feature_names], dataSet[self.target])
+        train_user_gbdt_feats, valid_user_gbdt_feats, user_gbdt_feats_name = gbdt_select_features(
+            trainX, trainY, testX, testY)
 
-        
-
+        logging.info('开始对ad-ID类特征进行one-hot编码...')
+        for col in self.ad_id_feature_names:
+            onehot_feats = pd.get_dummies(dataSet[col], prefix=col)
+            dataSet.drop([col], axis=1, inplace=True)
+            dataSet = pd.concat([dataSet, onehot_feats], axis=1)
+        logging.info('ad-ID类特征one-hot编码结束...')
+        trainX, trainY, testX, testY = split_dataSet(
+            dataSet[self.ad_id_feature_names], dataSet[self.target])
+        train_ad_gbdt_feats, valid_ad_gbdt_feats, ad_gbdt_feats_name = gbdt_select_features(
+            trainX, trainY, testX, testY)
 
 # def preProcess():
