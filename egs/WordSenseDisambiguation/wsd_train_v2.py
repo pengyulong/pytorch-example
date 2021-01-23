@@ -524,7 +524,7 @@ class Job:
                 acc = accuracy_score(y_true, np.array(y_pred))
                 # submis_fold = submis_fold + "_{.3f}".format(acc)
             logging.info(
-                "knn few-shot 在验证集上 f1:{}, acc:{}".format(self.seed, f1, acc))
+                "knn few-shot 在验证集上 f1:{}, acc:{}".format(f1, acc))
 
             # 预测并提交:
             # for json_fold in os.listdir(self.test_fold):

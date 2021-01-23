@@ -71,7 +71,7 @@ def gbdt_select_features(trainX, trainY, validX, validY):
 
 
 class CVRJob(object):
-    def __init__(self, project_config):
+    def __init__(self, project_config=project_config):
         self.target = project_config['label']
         self.sparse_feature_names = project_config['sparse_features']
         self.dense_feature_names = project_config['dense_features']
