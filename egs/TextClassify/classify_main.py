@@ -23,7 +23,7 @@ def loadDataSet(data_dir):
     if data_dir == 'weibo_moods':
         dataSet = pd.read_csv(os.path.join(data_dir,'data.csv'))
     if data_dir == "holtel_sent":
-        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'))
+        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='\t',header=None)
         data.columns = ['label','review']
     trainX, trainY, testX, testY = split_dataSet(dataSet['label'],dataSet['review'])
     return trainX, trainY, testX, testY
