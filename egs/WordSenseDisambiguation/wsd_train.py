@@ -60,17 +60,7 @@ def load_text_json(text_json):
         dataX.append([s1,ranges1,s2,ranges2])
     return dataX,id_list
 
-def process_sentence(sentence, ranges, mode='zh'):
-    if mode in ['zh','ar']:
-        ranges = sorted(ranges,key=lambda x:x[0])
-        for i,(start,end) in enumerate(ranges):
-            if end+2*i == len(sentence):
-                sentence = ','.join([sentence[:start+i*2],sentence[start+i*2:end+i*2]])
-            else:
-                sentence = ','.join([sentence[:start+i*2],sentence[start+i*2:end+i*2],sentence[end+i*2:]])
-            ranges[i][0] += (2*i+1)
-            ranges[i][1] += (2*i+1)
-    # print("sentence:{},ranges:{}".format(sentence,ranges))
+def process_sentence(sentence, ranges):
     token_list = []
     for [start, end] in ranges:
         target = sentence[start:end]
@@ -106,11 +96,61 @@ def load_dataSet(text_json, label_json):
     return dataX, dataY
 
 
-def split_dataSet(text_json, label_json):
+def split_dataSet2(text_json, label_json):
     inputX, target = load_dataSet(text_json, label_json)
     trainX, testX, trainY, testY = train_test_split(
         inputX, target, test_size=0.2, random_state=0)
     return trainX, trainY, testX, testY
+
+
+def split_dataSet(train_fold,dev_fold,mode='v1'):
+    trainX,trainY = load_dataSet(os.path.join(train_fold,"training.en-en.data"),os.path.join(train_fold,"training.en-en.gold"))
+    testX,testY = [],[]
+    for json_file in os.listdir(dev_fold):
+        if json_file.endswith('.data'):
+            data_json = os.path.join(dev_fold,json_file)
+            tags_json = os.path.join(dev_fold,json_file[0:-5]+".gold")
+            inputX,target = load_dataSet(data_json,tags_json)
+            trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.2, random_state=0)
+            testX.extend(testX2)
+            testY.extend(testY2)
+            if mode == 'v2':
+                trainX.extend(trainX2)
+                trainY.extend(trainY2)
+    return trainX, trainY, testX, testY
+
+# def loadTestSet(test_fold):
+#     testX, id_list = [], []
+#     for json_fold in os.listdir(test_fold):
+#         for f in os.listdir(os.path.join(test_fold,json_fold)):
+#             json_file = os.path.join(test,json_fold,f)
+#             if json_file.endswith('.data'):
+#                 tags_json = json_file[0:-5]+".gold"
+#                 inputX,target = load_dataSet(json_file,tags_json)
+#                 trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.25, random_state=0)
+#                 testX.extend(testX2)
+#                 testY.extend(testY2)
+#                 trainX.extend(trainX2)
+#                 trainY.extend(trainY2)
+#     return trainX, trainY, testX, testY
+
+
+
+def split_trailSet(trail_fold):
+    trainX,trainY,testX,testY = [],[],[],[]
+    for json_fold in os.listdir(trail_fold):
+        for f in os.listdir(os.path.join(trail_fold,json_fold)):
+            json_file = os.path.join(trail_fold,json_fold,f)
+            if json_file.endswith('.data'):
+                tags_json = json_file[0:-5]+".gold"
+                inputX,target = load_dataSet(json_file,tags_json)
+                trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.25, random_state=0)
+                testX.extend(testX2)
+                testY.extend(testY2)
+                trainX.extend(trainX2)
+                trainY.extend(trainY2)
+    return trainX, trainY, testX, testY
+
 
 
 class MyData(Dataset):
@@ -147,7 +187,7 @@ def collate_func(batch):
 
 
 class WordDisambiguationNet(nn.Module):
-    def __init__(self, bert_model, bert_tokenizer, in_features, tokenizer_type, nhead=1, num_layers=1, num_class=2):
+    def __init__(self, bert_model, bert_tokenizer, in_features, nhead=1, num_layers=1, num_class=2):
         super(WordDisambiguationNet, self).__init__()
         self.num_class = num_class
         self.nhead = nhead
@@ -155,7 +195,6 @@ class WordDisambiguationNet(nn.Module):
         self.in_features = in_features
         self.bert_model = bert_model.to(utils.get_device())
         self.bert_tokenizer = bert_tokenizer
-        self.tokenizer_type = tokenizer_type
         self.encoder_layer = nn.TransformerEncoder(nn.TransformerEncoderLayer(
             d_model=self.in_features, nhead=self.nhead), num_layers=self.num_layers)
         self.sim = nn.CosineSimilarity(dim=1)
@@ -176,7 +215,7 @@ class WordDisambiguationNet(nn.Module):
     def _select_embedding(self,sentences,range_list):
         post_sentences, lemma_id_list = [], []
         for i, ranges in enumerate(range_list):
-            s, lemma_id = process_sentence(sentences[i],ranges,mode=self.tokenizer_type)
+            s, lemma_id = process_sentence(sentences[i],ranges)
             post_sentences.append(s)
             lemma_id_list.append(lemma_id)
         encoder_inputs = self.bert_tokenizer(post_sentences,return_tensors='pt',padding=True).to(utils.get_device())
@@ -309,7 +348,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
         train_loss_list.append(train_loss)
         val_loss_list.append(val_loss)
 
-        val_f1 = val_metircs['f1']
+        val_f1 = val_metircs['acc']
         is_best = val_f1 >= best_val_f1
 
         utils.save_checkpoint({'epoch': epoch+1, 'state_dict': model.state_dict(
@@ -338,15 +377,19 @@ class Job:
     def __init__(self,seed):
         self.log_file = utils.set_logger("./train.log")
         self.device = utils.get_device()
-        self.batch_size = 32
+        self.batch_size = 16
         self.epoches = 10
         self.lr = 5e-6
         self.bert_model = bert_model
         self.bert_tokenizer = bert_tokenizer
-        self.train_text_json = r"dataset/training/training.en-en.data"
-        self.train_label_json = r"dataset/training/training.en-en.gold"
-        self.valid_text_json = r"dataset/dev/multilingual/dev.en-en.data"
-        self.valid_label_json = r"dataset/dev/multilingual/dev.en-en.gold"
+        # self.train_text_json = r"dataset/training/training.en-en.data"
+        # self.train_label_json = r"dataset/training/training.en-en.gold"
+        # self.valid_text_json = r"dataset/dev/multilingual/dev.en-en.data"
+        # self.valid_label_json = r"dataset/dev/multilingual/dev.en-en.gold"
+        self.train_fold = r"dataset/training"
+        self.dev_fold = r"dataset/dev/multilingual"
+        self.test_fold = r"dataset/test"
+        self.trial_fold = r"dataset/trial"
         self.seed = seed
 
         self.num_class = 2
@@ -357,31 +400,65 @@ class Job:
         self.model_dir = "End2endXLMRoBertaNet_v2_{}".format(self.seed)
         utils.setup_seed(seed)
 
-    def few_shot_train(self):
+
+    def finetune(self,mode='unfroze_all'):
+        
+        self.finetune_output = "End2endXLMRobertaNet_v2_finetune_{}".format(mode)
+        best_model_dir = os.path.join(self.model_dir,"best.pth.tar")
+        self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
+        logging.info("finetune训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
+        # self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
+        # self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
+
+        train_data = MyData.from_list(self.trainX, self.trainY)
+        # print("train_data:{}".format(train_data[0]))
+        valid_data = MyData.from_list(self.validX, self.validY)
+        train_dataloader = DataLoader(dataset=train_data, sampler=RandomSampler(
+            train_data), batch_size=6, shuffle=False, num_workers=4, drop_last=False,collate_fn=collate_func,pin_memory=True)
+        valid_dataloader = DataLoader(
+            dataset=valid_data, batch_size=len(valid_data), shuffle=False, num_workers=0,collate_fn=collate_func,drop_last=False)
+        model = WordDisambiguationNet(
+            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
+        model.to(device=self.device)
+        utils.load_checkpoint(best_model_dir,model)
+        if mode == 'unfroze_fc':
+            for name, params in model.named_parameters():
+                if 'fc' in name:
+                    continue
+                params.requires_grad = False
+                # if "bert" in name: #冻结bert所有层
+                #     params.requires_grad = False
+        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=2e-6, eps=1e-8)
+        lr_scheduler = get_linear_schedule_with_warmup(
+            optimizer, num_warmup_steps=self.warm_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
+        criterion = nn.CrossEntropyLoss()
+        self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion, utils.classify_metrics, epochs=5, model_dir=self.finetune_output, lr_scheduler=lr_scheduler, restore_file=None)
+        curr_hyp = {"epochs": self.epoches,"batch_size": self.batch_size, "lr": self.lr}
+        utils.save_dict_to_json(curr_hyp, os.path.join(self.finetune_output, "train_hyp.json"))
+
+    def few_shot_train(self,submis_fold):
         # text_json = r"dataset/trial/crosslingual/trial.en-ru.data"
         # label_json = r"dataset/trial/crosslingual/trial.en-ru.gold"
         # test_text_json = r"dataset/test_few_shot/crosslingual/test.en-ru.data"
         # test_label_json = r"dataset/test_few_shot/crosslingual/test.en-ru.gold"
+        device = utils.get_device()
+        self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
+        logging.info("few-shot knn 训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
+        train_data = MyData.from_list(self.trainX,self.trainY)
+        valid_data = MyData.from_list(self.validX,self.validY)
 
-        text_json = r"dataset/trial/multilingual/trial.zh-zh.data"
-        label_json = r"dataset/trial/multilingual/trial.zh-zh.gold"
-        test_text_json = r"dataset/test_few_shot/multilingual/test.zh-zh.data"
-        test_label_json = r"dataset/test_few_shot/multilingual/test.zh-zh.gold"
-        
-        tokenizer_type = text_json.split(os.sep)[-1].split('-')[1].split('.')[0]
-        device = self.device
-        output_dir = text_json.split(os.sep)[-1][0:-5]
-        dataX,dataY = load_dataSet(text_json, label_json)
-        test_data = MyData.from_list(dataX, dataY)
-        test_dataloader = DataLoader(dataset=test_data, batch_size=len(test_data), shuffle=False, num_workers=0, drop_last=False,collate_fn=collate_func)
-        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768,tokenizer_type=tokenizer_type)
+        train_dataloader = DataLoader(dataset=train_data,batch_size=len(train_data),drop_last=False,collate_fn=collate_func)
+        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(valid_data),drop_last=False,collate_fn=collate_func)
+        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
+	    # logging.info(model)
         utils.load_checkpoint(os.path.join(self.model_dir, "best.pth.tar"), model)
         model.to(device=device)
         model.eval()
         avg_cosine0, avg_cosine1 = None, None
         result_list = []
         with torch.no_grad():
-            for batch in test_dataloader:
+            # 训练
+            for batch in train_dataloader:
                 sentences1, ranges1, sentences2, ranges2, inputY = batch
                 inputY = inputY.to(device)
                 cosines = model._get_similarity(sentences1,ranges1,sentences2,ranges2)
@@ -401,33 +478,52 @@ class Job:
                         y_pred.append(0)
                     else:
                         y_pred.append(1)
-                f1 = f1_score(y_true,y_pred)
-                acc = accuracy_score(y_true,y_pred)
-                print("训练集{}--f1:{},acc:{}".format(text_json.split(os.sep)[-1],f1,acc))
-            texts,ids = load_text_json(test_text_json)
-            # print("texts:{}".format(texts))
-            # print("ids:{}".format(ids))
-            for id_name, text in tqdm(zip(ids,texts)):
-                # print("text:{}".format(text))
-                sentences1,ranges1,sentences2,ranges2 = text
-                cosine = model._get_similarity([sentences1],[ranges1],[sentences2],[ranges2])
-                cosine = cosine.detach().cpu().numpy().squeeze()
-                # print("cosine:{}".format(cosine))
-                if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
-                    label = "F"
-                else:
-                    label = "T"
-                result_list.append({"id":id_name,"tag":label})
-        with open(test_label_json,"w") as f:
-            json.dump(result_list,f)
+            # 验证:
+            for batch in valid_dataloader:
+                y_true, y_pred = [], []
+                sentences1,ranges1,sentences2,ranges2,inputY = batch
+                cosines = model._get_similarity(sentences1,ranges1,sentences2,ranges2)
+                cosines = cosines.detach().cpu().numpy().squeeze()
+                for cosine in cosines:
+                    if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
+                        y_pred.append(0)
+                    else:
+                        y_pred.append(1)
+                y_true = inputY.detach().cpu().numpy().squeeze()
+                f1 = f1_score(y_true,np.array(y_pred))
+                acc = accuracy_score(y_true,np.array(y_pred))
+		        # submis_fold = submis_fold + "_{.3f}".format(acc)
+            logging.info("rand_seed:{},knn few-shot 在验证集上 f1:{}, acc:{}".format(self.seed,f1,acc))
 
-
+            # 预测并提交:
+            for json_fold in os.listdir(self.test_fold):
+                for f in os.listdir(os.path.join(self.test_fold,json_fold)):
+                    json_file = os.path.join(self.test_fold,json_fold,f)
+                    if json_file.endswith(".data") == False:
+                        continue
+                    label_file = os.path.join(submis_fold,json_fold,f[0:-5]+".gold")
+                    if os.path.exists(os.path.join(submis_fold,json_fold)) == False:
+                        os.makedirs(os.path.join(submis_fold,json_fold))
+                    texts,ids = load_text_json(json_file)
+                    for id_name, text in tqdm(zip(ids,texts)):
+                        sentences1,ranges1,sentences2,ranges2 = text
+                        cosine = model._get_similarity([sentences1],[ranges1],[sentences2],[ranges2])
+                        cosine = cosine.detach().cpu().numpy().squeeze()
+                        # print("cosine:{}".format(cosine))
+                        if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
+                            label = "F"
+                        else:
+                            label = "T"
+                        result_list.append({"id":id_name,"tag":label})
+                    with open(label_file,"w") as f:
+                        json.dump(result_list,f,ensure_ascii=False,indent=4)
 
     def train(self):
-        # self.trainX, self.trainY, self.testX, self.testY = split_dataSet(
-        #     self.text_json, self.label_json)
-        self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
-        self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
+        self.trainX, self.trainY, self.validX, self.validY = split_dataSet(self.train_fold,self.dev_fold,mode='v2')
+
+        logging.info("训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
+        # self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
+        # self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
 
         train_data = MyData.from_list(self.trainX, self.trainY)
         # print("train_data:{}".format(train_data[0]))
@@ -436,16 +532,16 @@ class Job:
             train_data), batch_size=self.batch_size, shuffle=False, num_workers=4, drop_last=False,collate_fn=collate_func,pin_memory=True)
 
         valid_dataloader = DataLoader(
-            dataset=valid_data, batch_size=(self.batch_size), shuffle=False, num_workers=0,collate_fn=collate_func,drop_last=False)
+            dataset=valid_data, batch_size=self.batch_size, shuffle=False, num_workers=0,collate_fn=collate_func,drop_last=False)
         model = WordDisambiguationNet(
-            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features,tokenizer_type='en')
+            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
         model.to(device=self.device)
         XLMRoberta_params = list(map(id,model.bert_model.parameters()))
         base_params = filter(lambda p:id(p) not in XLMRoberta_params,model.parameters())
 
         optimizer = torch.optim.SGD(
             [
-                {"params":model.bert_model.parameters(),"lr":6e-5},
+                {"params":model.bert_model.parameters(),"lr":4e-5},
                 {"params":base_params},
             ],
             momentum=0.95,weight_decay=0.01,lr=0.001
@@ -468,89 +564,59 @@ class Job:
         df.to_csv("{}/loss.csv".format(self.model_dir))
 
     def evaluate(self):
-        text_json = r"dataset/dev/multilingual/dev.en-en.data"
-        label_json = r"dataset/dev/multilingual/dev.en-en.gold"
-        # text_json = r"dataset/trial/crosslingual/trial.en-zh.data"
-        # label_json = r"dataset/trial/crosslingual/trial.en-zh.gold"
-        tokenizer_type = text_json.split(os.sep)[-1].split('-')[1].split('.')[0]
-        device = self.device
-        output_dir = text_json.split(os.sep)[-1][0:-5]
-        if os.path.exists(output_dir)==False:
-            os.mkdir(output_dir)
-        dataX,dataY = load_dataSet(text_json, label_json)
-        test_data = MyData.from_list(dataX, dataY)
-        test_dataloader = DataLoader(dataset=test_data, batch_size=len(test_data), shuffle=False, num_workers=0, drop_last=False,collate_fn=collate_func)
-        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768,tokenizer_type=tokenizer_type)
+        device = utils.get_device()
+        _,_,validX,validY = split_trailSet(self.trial_fold)
+        valid_data = MyData.from_list(validX,validY)
+        # logging.info("finetune训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
+        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(valid_data), shuffle=False, num_workers=0, drop_last=False,collate_fn=collate_func)
+        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
         utils.load_checkpoint(os.path.join(self.model_dir, "best.pth.tar"), model)
         model.to(device=device)
         model.eval()
         with torch.no_grad():
-            for batch in test_dataloader:
+            for batch in valid_dataloader:
                 sentences1, ranges1, sentences2, ranges2, inputY = batch
                 inputY = inputY.to(device)
                 output_batch = model(sentences1, ranges1, sentences2, ranges2)
                 y_pred = np.argmax(output_batch.detach().cpu().numpy(), axis=1).squeeze()
                 y_true = inputY.detach().cpu().numpy().squeeze()
-                result = pd.DataFrame(
-                    data={'y_true': y_true, 'y_pred': y_pred}, index=range(len(y_pred)))
-                # result.to_csv(r"{}/result.csv".format(output_dir))
-                print("--测试集{}-{}上的性能指标f1:{},acc:{}".format(text_json.split(os.sep)[1],output_dir,f1_score(y_true,y_pred), accuracy_score(y_true, y_pred)))
+                print("--trial测试集上的性能指标f1:{},acc:{}".format(f1_score(y_true,y_pred), accuracy_score(y_true, y_pred)))
 
    
-    def predict(self):
-        text_json = r"dataset/test/crosslingual/test.en-ar.data"
-        label_json = r"dataset/test/crosslingual/test.en-ar.gold"
-        # text_json = r"dataset/test/multilingual/test.zh-zh.data"
-        # label_json = r"dataset/test/multilingual/test.zh-zh.gold"
-        tokenizer_type = text_json.split(os.sep)[-1].split('-')[1].split('.')[0]
-        # test_data, test_id = load_text_json(text_json)
-        model = WordDisambiguationNet(bert_model=bert_model,bert_tokenizer=bert_tokenizer,in_features=self.in_features,tokenizer_type=tokenizer_type)
+    def predict(self,outfold):
+        model = WordDisambiguationNet(bert_model=bert_model,bert_tokenizer=bert_tokenizer,in_features=self.in_features)
         utils.load_checkpoint(os.path.join(
-            self.model_dir, "best.pth.tar"), model)
+            self.finetune_output, "best.pth.tar"), model)
         model.to(device=self.device)
         model.eval()
         result_list = []
         with torch.no_grad():
-            texts,ids = load_text_json(text_json)
-            for id_name, text in tqdm(zip(ids,texts)):
-                # print("text:{}".format(text))
-                (sentence1,ranges1,sentence2,ranges2) = text
-                output = model([sentence1],[ranges1],[sentence2],[ranges2])
-                y_pred = np.argmax(output.detach().cpu().numpy(),axis=1).squeeze()
-                label = "T" if y_pred == 1 else "F"
-                result_list.append({"id":id_name,"tag":label})
-        with open(label_json,"w") as f:
-            json.dump(result_list,f)
-
-    def draw_picture(self):
-        plt.figure()
-        if self.loss_result is None:
-            df = pd.read_csv(
-                "{}/loss.csv".format(self.model_dir))
-            epochs = range(len(df))
-            val_loss = df['val']
-            train_loss = df['train']
-        else:
-            epochs = range(len(self.loss_result['val_loss']))
-            val_loss = self.loss_result['val_loss']
-            train_loss = self.loss_result['train_loss']
-        # val_loss = []
-        plt.plot(epochs, train_loss, label='train')
-        plt.plot(epochs, val_loss, label='valid')
-        plt.xlabel("epochs")
-        plt.ylabel("loss")
-        plt.legend()
-        plt.grid(axis='both', linestyle='-.')  # 设置网格线
-        plt.savefig(r"{0}/{1}_loss.png".format(self.model_dir, self.mode),
-                    format='png', transparent=True, dpi=300, pad_inches=0)
+            for fold in os.listdir(self.test_fold):
+                # print("fold:{}".format(fold))
+                newfold = os.path.join(outfold,fold)
+                if os.path.exists(newfold)==False:
+                    os.makedirs(newfold)
+                for files in os.listdir(os.path.join(self.test_fold,fold)):
+                    text_json = os.path.join(self.test_fold,fold,files)
+                    if text_json.endswith('.data'):
+                        # print("text_json:{}".format(text_json))
+                        texts,ids = load_text_json(text_json)
+                        for id_name, text in tqdm(zip(ids,texts)):
+                            # print("text:{}".format(text))
+                            (sentence1,ranges1,sentence2,ranges2) = text
+                            output = model([sentence1],[ranges1],[sentence2],[ranges2])
+                            y_pred = np.argmax(output.detach().cpu().numpy(),axis=1).squeeze()
+                            label = "T" if y_pred == 1 else "F"
+                            result_list.append({"id":id_name,"tag":label})
+                        with open(os.path.join(newfold,files[0:-5]+".gold"),"w") as f:
+                            json.dump(result_list,f,ensure_ascii=False,indent=4)
 
 
 if __name__ == "__main__":
-    for seed in [2020,43,26,48,78]:
-        job = Job(seed=seed)
-        job.train()
-    # job.train()
-    # job.evaluate()
-    # # job.few_shot_train()
-    # # job.predict()
-
+    # for seed in [2020,1234,6893,4568,2235]:
+    job = Job(seed=4568)
+    # job.few_shot_train("test_few_shot_knn_{}".format(seed))
+    job.evaluate()
+    # froze_mode = 'unfroze_fc'
+    # job.finetune(mode=froze_mode)
+    # job.predict("test_v2_finetune_{}".format(froze_mode))
