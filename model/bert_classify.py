@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from utils import get_device
-from .layer import TextCNN,BiGru
+from .layer import DPCNN,AttentionBiGRU,BiGRU
 
 class BertClassfier(nn.Module):
     def __init__(self, bert_model, bert_tokenizer, bert_config, num_class, dropout=0.2):
@@ -20,7 +20,6 @@ class BertClassfier(nn.Module):
     def forward(self, inputs):
         encoder_inputs = self.bert_tokenizer(inputs,return_tensors='pt',padding=True)
         encoder_inputs = encoder_inputs.to(get_device())
-        # 句向量 [batch_size,hidden_size]
         bert_out = self.bert_model(**encoder_inputs)[1]
         bert_cout = self.fc_layer(bert_cout)
         return bert_out
@@ -58,7 +57,9 @@ class BertSequenceClassfier(nn.Module):
         return self.fc_layer(out)        
 
 class BertEncoderClassfier(nn.Module):
-    def __init__(self, bert_model, bert_tokenizer, num_class, bert_config, encoder_type='cnn', dropout=0.2):
+    """BiGRU, Att_BiGRU, DPCNN
+    """
+    def __init__(self, bert_model, bert_tokenizer, num_class, bert_config, max_length = 510, encoder_type=None, dropout=0.2):
         super(BertEncoderClassfier, self).__init__()
         self.device = get_device()
         self.bert_model = bert_model
@@ -66,10 +67,13 @@ class BertEncoderClassfier(nn.Module):
         self.bert_config = bert_config
         self.dropout = nn.Dropout(dropout)
         self.num_class = num_class
-        if encoder_type == 'cnn':
-            self.encoder_layer = TextCNN(kernel_sizes=range(2,5),num_channels=[128,128,128],embed_size=self.bert_config.hidden_size,num_class=self.num_class,dropout=dropout).to(self.device)
-        if encoder_type == 'rnn':
-            self.encoder_layer = BiGru(hidden_size=128,num_class=num_class,embed_size=bert_config.hidden_size,num_layers=1).to(self.device)
+        if encoder_type == 'DPCNN':
+            self.encoder_layer = DPCNN(filter_num=128,seq_length=max_length,embed_dim=self.bert_config.hidden_size,num_class=self.num_class).to(self.device)
+            # self.encoder_layer = TextCNN(kernel_sizes=range(2,5),num_channels=[128,128,128],embed_size=self.bert_config.hidden_size,num_class=self.num_class,dropout=dropout).to(self.device)
+        if encoder_type == 'BiGRU':
+            self.encoder_layer = BiGRU(hidden_size=128,num_class=num_class,embed_size=bert_config.hidden_size,num_layers=1).to(self.device)
+        if encoder_type == "Att_BiGRU":
+            self.encoder_layer = AttentionBiGRU(hidden_size=128,num_class=self.num_class,embed_size=bert_config.hidden_size,num_layers=1).to(self.device)
 
     def forward(self, inputs):
         encoder_inputs = self.bert_tokenizer(inputs,return_tensors='pt',padding=True)

@@ -428,16 +428,16 @@ class Job:
     def finetune(self, mode='froze_bert'):
         self.finetune_output = "End2endXLMRobertaNet_v3_finetune"
         best_model_dir = os.path.join(self.model_dir, "best.pth.tar")
-        (validX, validY) = self.test_set['zh-zh']
+        (validX, validY) = self.valid_set['zh-zh']
         trainX, trainY = self.x_support, self.y_support
         logging.info("finetune训练集样本数:{},验证集样本数:{}".format(
             len(trainY), len(validY)))
         train_data = MyData.from_list(trainX, trainY)
         valid_data = MyData.from_list(validX, validY)
         train_dataloader = DataLoader(dataset=train_data, sampler=RandomSampler(
-            train_data), batch_size=10, shuffle=False, num_workers=4, drop_last=False, collate_fn=collate_func, pin_memory=True)
+            train_data), batch_size=20, shuffle=False, num_workers=4, drop_last=False, collate_fn=collate_func, pin_memory=True)
         valid_dataloader = DataLoader(
-            dataset=valid_data, batch_size=10, shuffle=False, num_workers=0, collate_fn=collate_func, drop_last=False)
+            dataset=valid_data, batch_size=20, shuffle=False, num_workers=0, collate_fn=collate_func, drop_last=False)
         model = WordDisambiguationNet(
             bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
         model.to(device=self.device)
@@ -448,14 +448,41 @@ class Job:
         optimizer = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, model.parameters()), lr=2e-6, eps=1e-8)
         lr_scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=self.warm_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
+            optimizer, num_warmup_steps=self.warm_ratio*(4*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
         criterion = nn.CrossEntropyLoss()
         self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,
-                                              utils.classify_metrics, epochs=5, model_dir=self.finetune_output, lr_scheduler=lr_scheduler, restore_file=None)
+                                              utils.classify_metrics, epochs=4, model_dir=self.finetune_output, lr_scheduler=lr_scheduler, restore_file=None)
         curr_hyp = {"epochs": self.epoches,
                     "batch_size": self.batch_size, "lr": self.lr}
         utils.save_dict_to_json(curr_hyp, os.path.join(
             self.finetune_output, "train_hyp.json"))
+
+    def finetune_evaluate(self):
+        (testX, testY) = self.test_set['zh-zh']
+        logging.info("测试集样本数:{}".format(len(testY)))
+        test_data = MyData.from_list(testX, testY)
+        test_dataloader = DataLoader(
+            dataset=test_data, batch_size=10, shuffle=False, num_workers=0, collate_fn=collate_func, drop_last=False
+        )
+        model = WordDisambiguationNet(
+            bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
+        model.to(device=self.device)
+        utils.load_checkpoint(os.path.join(
+            self.finetune_output, "best.pth.tar"), model)
+        y_preds, y_trues = [], []
+        model.eval()
+        with torch.no_grad():
+            for batch in test_dataloader:
+                sentences1, ranges1, sentences2, ranges2, inputY = batch
+                inputY = inputY.to(self.device)
+                output_batch = model(sentences1, ranges1, sentences2, ranges2)
+                y_pred = np.argmax(
+                    output_batch.detach().cpu().numpy(), axis=1).squeeze()
+                y_true = inputY.detach().cpu().numpy().squeeze()
+                y_preds.extend(y_pred)
+                y_trues.extend(y_true)
+        logging.info("finetune 在测试集(dev/test)上的性能指标f1:{},acc:{}".format(f1_score(y_trues,
+                                                                                 y_preds), accuracy_score(y_trues, y_preds)))
 
     def few_shot_train(self, submis_fold=None):
         # text_json = r"dataset/trial/crosslingual/trial.en-ru.data"
@@ -464,17 +491,23 @@ class Job:
         # test_label_json = r"dataset/test_few_shot/crosslingual/test.en-ru.gold"
         device = utils.get_device()
         # self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
-        (validX, validY) = self.test_set['zh-zh']
+        # (validX, validY) = self.test_set['zh-zh']
+        validX, validY = self.valid_set['zh-zh']
         trainX, trainY = self.x_support, self.y_support
+        testX, testY = self.test_set['zh-zh']
         logging.info(
-            "few-shot knn 训练集样本数:{},验证集样本数:{}".format(len(trainY), len(validY)))
+            "few-shot knn 训练集样本数:{},验证集样本数:{},测试集样本数:{}".format(len(trainY), len(validY), len(testY)))
         train_data = MyData.from_list(trainX, trainY)
         valid_data = MyData.from_list(validX, validY)
+        test_data = MyData.from_list(testX, testY)
 
         train_dataloader = DataLoader(dataset=train_data, batch_size=len(
             train_data), drop_last=False, collate_fn=collate_func)
         valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(
             valid_data), drop_last=False, collate_fn=collate_func)
+        test_dataloader = DataLoader(dataset=test_data, batch_size=len(
+            test_data), collate_fn=collate_func, drop_last=False)
+
         model = WordDisambiguationNet(
             bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
         # logging.info(model)
@@ -524,7 +557,25 @@ class Job:
                 acc = accuracy_score(y_true, np.array(y_pred))
                 # submis_fold = submis_fold + "_{.3f}".format(acc)
             logging.info(
-                "knn few-shot 在验证集上 f1:{}, acc:{}".format(f1, acc))
+                "knn few-shot 在验证集(dev/validation)上 f1:{}, acc:{}".format(f1, acc))
+
+            for batch in test_dataloader:
+                y_true, y_pred = [], []
+                sentences1, ranges1, sentences2, ranges2, inputY = batch
+                cosines = model._get_similarity(
+                    sentences1, ranges1, sentences2, ranges2)
+                cosines = cosines.detach().cpu().numpy().squeeze()
+                for cosine in cosines:
+                    if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
+                        y_pred.append(0)
+                    else:
+                        y_pred.append(1)
+                y_true = inputY.detach().cpu().numpy().squeeze()
+                f1 = f1_score(y_true, np.array(y_pred))
+                acc = accuracy_score(y_true, np.array(y_pred))
+                # submis_fold = submis_fold + "_{.3f}".format(acc)
+            logging.info(
+                "knn few-shot 在测试集(dev/test)上 f1:{}, acc:{}".format(f1, acc))
 
             # 预测并提交:
             # for json_fold in os.listdir(self.test_fold):
@@ -668,7 +719,7 @@ class Job:
                             # print("text:{}".format(text))
                             (sentence1, ranges1, sentence2, ranges2) = text
                             output = model([sentence1], [ranges1], [
-                                           sentence2], [ranges2])
+                                sentence2], [ranges2])
                             y_pred = np.argmax(
                                 output.detach().cpu().numpy(), axis=1).squeeze()
                             label = "T" if y_pred == 1 else "F"
@@ -686,6 +737,7 @@ if __name__ == "__main__":
     # job.predict(job.model_dir, "test_zero_shot_v3")
 
     job.finetune()
+    job.finetune_evaluate()
     job.few_shot_train()
     # job.few_shot_train("test_few_shot_knn_{}".format(seed))
     # job.evaluate()

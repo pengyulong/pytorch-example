@@ -122,9 +122,9 @@ class TextCNN(nn.Module):
         return self.fc_layer(out)
 
 
-class BiGru(nn.Module):
+class BiGRU(nn.Module):
     def __init__(self,hidden_size,num_class,embed_size,num_layers):
-        super(BiGru,self).__init__()
+        super(BiGRU,self).__init__()
         self.num_class = num_class
         self.hidden_size = hidden_size
         self.embed_size = embed_size
@@ -137,7 +137,8 @@ class BiGru(nn.Module):
     def forward(self,inputs):
         assert inputs.shape[2] == self.embed_size
         out,hn = self.encoder(inputs)
-        return self.fc_layer(out[:,-1,:])
+        concat = torch.cat((hn[0],hn[1]),dim=1)
+        return self.fc_layer(concat)
 
 class AttentionBiGRU(nn.Module):
     def __init__(self,hidden_size,num_class,embed_size,num_layers):
@@ -149,11 +150,12 @@ class AttentionBiGRU(nn.Module):
 
         self.encoder = nn.GRU(input_size=self.embed_size,hidden_size=self.hidden_size,bidirectional=True,batch_first=True,num_layers=self.num_layers)
 
-        self.att_layer = Attention()
+        self.att_layer = Attention(2*self.hidden_size)
 
         self.fc_layer = nn.Sequential(nn.Linear(self.hidden_size*2,self.hidden_size),nn.ReLU(inplace=True),nn.Linear(self.hidden_size,self.num_class))
 
     def forward(self,inputs):
         assert inputs.shape[2] == self.embed_size
         out,hn = self.encoder(inputs)
-        return self.fc_layer(out[:,-1,:])
+        att = self.att_layer(out)
+        return self.fc_layer(att)
