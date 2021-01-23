@@ -24,7 +24,7 @@ def loadDataSet(data_dir):
         dataSet = pd.read_csv(os.path.join(data_dir,'data.csv'))
     if data_dir == "holtel_sent":
         dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='\t',header=None)
-        data.columns = ['label','review']
+        dataSet.columns = ['label','review']
     trainX, trainY, testX, testY = split_dataSet(dataSet['label'],dataSet['review'])
     return trainX, trainY, testX, testY
 
