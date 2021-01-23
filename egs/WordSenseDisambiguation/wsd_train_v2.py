@@ -24,10 +24,12 @@ from transformers import XLMRobertaTokenizer, XLMRobertaModel
 from nltk.tokenize import word_tokenize
 from torchsummary import summary
 
-bert_tokenizer = XLMRobertaTokenizer.from_pretrained('xlm-roberta-base',is_split_into_words=True)
+bert_tokenizer = XLMRobertaTokenizer.from_pretrained(
+    'xlm-roberta-base', is_split_into_words=True)
 bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 # model = BertModel.from_pretrained("./model")
+
 
 def load_json(json_file):
     with codecs.open(json_file, 'r', encoding='utf-8') as f:
@@ -37,28 +39,31 @@ def load_json(json_file):
         data_dict[data['id']] = data
     return data_dict
 
+
 def extrace_range(string):
     ranges = []
     for data in string.split(','):
-        bpos, epos = int(data.split('-')[0]),int(data.split('-')[1])
-        ranges.append([bpos,epos])
+        bpos, epos = int(data.split('-')[0]), int(data.split('-')[1])
+        ranges.append([bpos, epos])
     return ranges
 
+
 def load_text_json(text_json):
-    dataX,id_list = [],[]
+    dataX, id_list = [], []
     text_dict = load_json(text_json)
     for key, value in tqdm(text_dict.items()):
         s1, s2 = value['sentence1'], value['sentence2']
-        ranges1,ranges2 = [],[]
+        ranges1, ranges2 = [], []
         if 'start1' in value:
-            ranges1.append([int(value['start1']),int(value['end1'])])
-            ranges2.append([int(value['start2']),int(value['end2'])])
+            ranges1.append([int(value['start1']), int(value['end1'])])
+            ranges2.append([int(value['start2']), int(value['end2'])])
         else:
             ranges1 = extrace_range(value['ranges1'])
             ranges2 = extrace_range(value['ranges2'])
         id_list.append(key)
-        dataX.append([s1,ranges1,s2,ranges2])
-    return dataX,id_list
+        dataX.append([s1, ranges1, s2, ranges2])
+    return dataX, id_list
+
 
 def process_sentence(sentence, ranges):
     token_list = []
@@ -102,39 +107,47 @@ def split_dataSet2(text_json, label_json):
         inputX, target, test_size=0.2, random_state=0)
     return trainX, trainY, testX, testY
 
+
 def extract_name(json_file):
     return json_file.split('.')[1]
 
-def split_dataSet(train_fold,dev_fold):
-    trainX,trainY = load_dataSet(os.path.join(train_fold,"training.en-en.data"),os.path.join(train_fold,"training.en-en.gold"))
+
+def split_dataSet(train_fold, dev_fold):
+    trainX, trainY = load_dataSet(os.path.join(
+        train_fold, "training.en-en.data"), os.path.join(train_fold, "training.en-en.gold"))
     valid_set, test_set = {}, {}
     x_support, y_support = [], []
     for json_file in os.listdir(dev_fold):
         if json_file.endswith('.data'):
-            data_json = os.path.join(dev_fold,json_file)
-            tags_json = os.path.join(dev_fold,json_file[0:-5]+".gold")
-            inputX,target = load_dataSet(data_json,tags_json) 
-            trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.2, random_state=0)
+            data_json = os.path.join(dev_fold, json_file)
+            tags_json = os.path.join(dev_fold, json_file[0:-5]+".gold")
+            inputX, target = load_dataSet(data_json, tags_json)
+            trainX2, testX2, trainY2, testY2 = train_test_split(
+                inputX, target, test_size=0.2, random_state=0)
             language_name = extract_name(json_file)
             # dev中的每个文件的20% 作为测试集,并带上keywords
-            test_set[language_name] = (testX2,testY2)
-            x_train, x_valid, y_train, y_valid = train_test_split(trainX2,trainY2,test_size=0.25,random_state=0)
-            if language_name in ['zh-zh','en-en']:
-                valid_set[language_name] = (x_valid,y_valid)
+            test_set[language_name] = (testX2, testY2)
+            x_train, x_valid, y_train, y_valid = train_test_split(
+                trainX2, trainY2, test_size=0.25, random_state=0)
+            if language_name in ['zh-zh', 'en-en']:
+                valid_set[language_name] = (x_valid, y_valid)
             if language_name == 'zh-zh':
                 x_support.extend(x_train[0:100])
                 y_support.extend(y_train[0:100])
-    return trainX,trainY,x_support,y_support,valid_set,test_set
+    return trainX, trainY, x_support, y_support, valid_set, test_set
 
-def split_dataSet2(train_fold,dev_fold,mode='v1'):
-    trainX,trainY = load_dataSet(os.path.join(train_fold,"training.en-en.data"),os.path.join(train_fold,"training.en-en.gold"))
-    testX,testY = [],[]
+
+def split_dataSet2(train_fold, dev_fold, mode='v1'):
+    trainX, trainY = load_dataSet(os.path.join(
+        train_fold, "training.en-en.data"), os.path.join(train_fold, "training.en-en.gold"))
+    testX, testY = [], []
     for json_file in os.listdir(dev_fold):
         if json_file.endswith('.data'):
-            data_json = os.path.join(dev_fold,json_file)
-            tags_json = os.path.join(dev_fold,json_file[0:-5]+".gold")
-            inputX,target = load_dataSet(data_json,tags_json)
-            trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.2, random_state=0)
+            data_json = os.path.join(dev_fold, json_file)
+            tags_json = os.path.join(dev_fold, json_file[0:-5]+".gold")
+            inputX, target = load_dataSet(data_json, tags_json)
+            trainX2, testX2, trainY2, testY2 = train_test_split(
+                inputX, target, test_size=0.2, random_state=0)
             testX.extend(testX2)
             testY.extend(testY2)
             if mode == 'v2':
@@ -142,23 +155,26 @@ def split_dataSet2(train_fold,dev_fold,mode='v1'):
                 trainY.extend(trainY2)
     return trainX, trainY, testX, testY
 
+
 def split_trailSet(trail_fold):
-    trainX,trainY,testX,testY = [],[],[],[]
+    trainX, trainY, testX, testY = [], [], [], []
     for json_fold in os.listdir(trail_fold):
-        for f in os.listdir(os.path.join(trail_fold,json_fold)):
-            json_file = os.path.join(trail_fold,json_fold,f)
+        for f in os.listdir(os.path.join(trail_fold, json_fold)):
+            json_file = os.path.join(trail_fold, json_fold, f)
             if json_file.endswith('.data'):
                 tags_json = json_file[0:-5]+".gold"
-                inputX,target = load_dataSet(json_file,tags_json)
-                trainX2, testX2, trainY2, testY2 = train_test_split(inputX, target, test_size=0.25, random_state=0)
+                inputX, target = load_dataSet(json_file, tags_json)
+                trainX2, testX2, trainY2, testY2 = train_test_split(
+                    inputX, target, test_size=0.25, random_state=0)
                 testX.extend(testX2)
                 testY.extend(testY2)
                 trainX.extend(trainX2)
                 trainY.extend(trainY2)
     return trainX, trainY, testX, testY
 
+
 class MyData(Dataset):
-    def __init__(self, sentences1,sentences2,ranges1,ranges2,labels):
+    def __init__(self, sentences1, sentences2, ranges1, ranges2, labels):
         self.sentence1 = sentences1
         self.sentence2 = sentences2
         self.ranges1 = ranges1
@@ -169,12 +185,12 @@ class MyData(Dataset):
         return len(self.labels)
 
     def __getitem__(self, index):
-        return self.sentence1[index],self.ranges1[index],self.sentence2[index],self.ranges2[index],self.labels[index]
+        return self.sentence1[index], self.ranges1[index], self.sentence2[index], self.ranges2[index], self.labels[index]
 
     @classmethod
-    def from_list(cls,inputs,target):
+    def from_list(cls, inputs, target):
         sentence1, sentence2, ranges1, ranges2, labels = [], [], [], [], []
-        for dataX, dataY in zip(inputs, target):
+        for dataX, dataY in tqdm(zip(inputs, target)):
             text1, range1, text2, range2 = dataX
             sentence1.append(text1)
             sentence2.append(text2)
@@ -185,9 +201,9 @@ class MyData(Dataset):
 
 
 def collate_func(batch):
-    setences1,ranges1,sentence2,ranges2,labels = zip(*batch)
+    setences1, ranges1, sentence2, ranges2, labels = zip(*batch)
     labels = torch.LongTensor(labels)
-    return setences1,ranges1,sentence2,ranges2,labels
+    return setences1, ranges1, sentence2, ranges2, labels
 
 
 class WordDisambiguationNet(nn.Module):
@@ -209,35 +225,38 @@ class WordDisambiguationNet(nn.Module):
         )
         self.avgpool = nn.AvgPool1d(2)
 
-    def forward(self, sentences1,ranges1,sentences2,ranges2):
+    def forward(self, sentences1, ranges1, sentences2, ranges2):
         # print("sentences")
-        cosine = self._get_similarity(sentences1,ranges1,sentences2,ranges2)
+        cosine = self._get_similarity(sentences1, ranges1, sentences2, ranges2)
         out1, out2 = cosine.unsqueeze(1), (1-cosine).unsqueeze(1)
         out = torch.cat((out1, out2), dim=1)
         return self.fc_layer(out)
 
-    def _select_embedding(self,sentences,range_list):
+    def _select_embedding(self, sentences, range_list):
         post_sentences, lemma_id_list = [], []
         for i, ranges in enumerate(range_list):
-            s, lemma_id = process_sentence(sentences[i],ranges)
+            s, lemma_id = process_sentence(sentences[i], ranges)
             post_sentences.append(s)
             lemma_id_list.append(lemma_id)
-        encoder_inputs = self.bert_tokenizer(post_sentences,return_tensors='pt',padding=True).to(utils.get_device())
+        encoder_inputs = self.bert_tokenizer(
+            post_sentences, return_tensors='pt', padding=True).to(utils.get_device())
         output = self.bert_model(**encoder_inputs)
-        lemma_embedings = torch.zeros(len(sentences),self.in_features).to(utils.get_device())
-        for i,lemma_id in enumerate(lemma_id_list):
-            lemma_embedings[i] = output[0][i,lemma_id,:].mean(dim=0)
+        lemma_embedings = torch.zeros(
+            len(sentences), self.in_features).to(utils.get_device())
+        for i, lemma_id in enumerate(lemma_id_list):
+            lemma_embedings[i] = output[0][i, lemma_id, :].mean(dim=0)
         return lemma_embedings.unsqueeze(1)
 
-    def _get_similarity(self,sentences1,ranges1,sentences2,ranges2):
+    def _get_similarity(self, sentences1, ranges1, sentences2, ranges2):
         vec1 = self._select_embedding(sentences1, ranges1)
         vec2 = self._select_embedding(sentences2, ranges2)
-        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2),dim=1)
+        concat = torch.cat((vec1-vec2, vec2-vec1, vec1, vec2), dim=1)
         output = self.encoder_layer(concat)
         output = output.permute(0, 2, 1)
         output = self.avgpool(output)
         cosine = self.sim(output[:, 0, :], output[:, 1, :])
         return cosine
+
 
 def evaluate(model, loss_func, dataloader, metrics):
     """Evaluate the model on `num_steps` batches.
@@ -331,7 +350,7 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
     # reload weights from restore_file if specified
     train_loss_list, val_loss_list = [], []
     early_stopping = utils.EarlyStopping(patience=20, verbose=True)
-    
+
     if restore_file is not None:
         restore_path = os.path.join(model_dir, restore_file+'.pth.tar')
         logging.info("Restoring parameters from {}".format(restore_path))
@@ -378,10 +397,10 @@ def train_and_evaluate(model, train_dataloader, val_dataloader, optimizer, loss_
 
 
 class Job:
-    def __init__(self,seed=4568):
+    def __init__(self, seed=4568):
         self.log_file = utils.set_logger("./train.log")
         self.device = utils.get_device()
-        self.batch_size = 16
+        self.batch_size = 32
         self.epoches = 10
         self.lr = 5e-6
         self.bert_model = bert_model
@@ -402,61 +421,65 @@ class Job:
         self.loss_result = None
         self.warm_ratio = 0.1
         self.model_dir = "End2endXLMRoBertaNet_v3_{}".format(self.seed)
-        self.trainX,self.trainY,self.x_support,self.y_support,self.valid_set,self.test_set = split_dataSet(self.train_fold,self.dev_fold)
+        self.trainX, self.trainY, self.x_support, self.y_support, self.valid_set, self.test_set = split_dataSet(
+            self.train_fold, self.dev_fold)
         utils.setup_seed(seed)
 
-
-    def finetune(self,mode='unfroze_all'):
-        
-        self.finetune_output = "End2endXLMRobertaNet_v3_finetune_{}".format(mode)
-        best_model_dir = os.path.join(self.model_dir,"best.pth.tar")
-        self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
-        logging.info("finetune训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
-        # self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
-        # self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
-
-        train_data = MyData.from_list(self.trainX, self.trainY)
-        # print("train_data:{}".format(train_data[0]))
-        valid_data = MyData.from_list(self.validX, self.validY)
+    def finetune(self, mode='froze_bert'):
+        self.finetune_output = "End2endXLMRobertaNet_v3_finetune"
+        best_model_dir = os.path.join(self.model_dir, "best.pth.tar")
+        (validX, validY) = self.test_set['zh-zh']
+        trainX, trainY = self.x_support, self.y_support
+        logging.info("finetune训练集样本数:{},验证集样本数:{}".format(
+            len(trainY), len(validY)))
+        train_data = MyData.from_list(trainX, trainY)
+        valid_data = MyData.from_list(validX, validY)
         train_dataloader = DataLoader(dataset=train_data, sampler=RandomSampler(
-            train_data), batch_size=6, shuffle=False, num_workers=4, drop_last=False,collate_fn=collate_func,pin_memory=True)
+            train_data), batch_size=10, shuffle=False, num_workers=4, drop_last=False, collate_fn=collate_func, pin_memory=True)
         valid_dataloader = DataLoader(
-            dataset=valid_data, batch_size=len(valid_data), shuffle=False, num_workers=0,collate_fn=collate_func,drop_last=False)
+            dataset=valid_data, batch_size=10, shuffle=False, num_workers=0, collate_fn=collate_func, drop_last=False)
         model = WordDisambiguationNet(
             bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
         model.to(device=self.device)
-        utils.load_checkpoint(best_model_dir,model)
-        if mode == 'unfroze_fc':
-            for name, params in model.named_parameters():
-                # if 'fc' in name:
-                #     continue
-                # params.requires_grad = False
-                if "bert" in name: #冻结bert所有层
-                    params.requires_grad = False
-        optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=2e-6, eps=1e-8)
+        utils.load_checkpoint(best_model_dir, model)
+        for name, params in model.named_parameters():
+            if "bert" in name:  # 冻结bert所有层
+                params.requires_grad = False
+        optimizer = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()), lr=2e-6, eps=1e-8)
         lr_scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=self.warm_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
         criterion = nn.CrossEntropyLoss()
-        self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion, utils.classify_metrics, epochs=5, model_dir=self.finetune_output, lr_scheduler=lr_scheduler, restore_file=None)
-        curr_hyp = {"epochs": self.epoches,"batch_size": self.batch_size, "lr": self.lr}
-        utils.save_dict_to_json(curr_hyp, os.path.join(self.finetune_output, "train_hyp.json"))
+        self.loss_result = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,
+                                              utils.classify_metrics, epochs=5, model_dir=self.finetune_output, lr_scheduler=lr_scheduler, restore_file=None)
+        curr_hyp = {"epochs": self.epoches,
+                    "batch_size": self.batch_size, "lr": self.lr}
+        utils.save_dict_to_json(curr_hyp, os.path.join(
+            self.finetune_output, "train_hyp.json"))
 
-    def few_shot_train(self,submis_fold):
+    def few_shot_train(self, submis_fold=None):
         # text_json = r"dataset/trial/crosslingual/trial.en-ru.data"
         # label_json = r"dataset/trial/crosslingual/trial.en-ru.gold"
         # test_text_json = r"dataset/test_few_shot/crosslingual/test.en-ru.data"
         # test_label_json = r"dataset/test_few_shot/crosslingual/test.en-ru.gold"
         device = utils.get_device()
-        self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
-        logging.info("few-shot knn 训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
-        train_data = MyData.from_list(self.trainX,self.trainY)
-        valid_data = MyData.from_list(self.validX,self.validY)
+        # self.trainX, self.trainY, self.validX, self.validY = split_trailSet(self.trial_fold)
+        (validX, validY) = self.test_set['zh-zh']
+        trainX, trainY = self.x_support, self.y_support
+        logging.info(
+            "few-shot knn 训练集样本数:{},验证集样本数:{}".format(len(trainY), len(validY)))
+        train_data = MyData.from_list(trainX, trainY)
+        valid_data = MyData.from_list(validX, validY)
 
-        train_dataloader = DataLoader(dataset=train_data,batch_size=len(train_data),drop_last=False,collate_fn=collate_func)
-        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(valid_data),drop_last=False,collate_fn=collate_func)
-        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
-	    # logging.info(model)
-        utils.load_checkpoint(os.path.join(self.model_dir, "best.pth.tar"), model)
+        train_dataloader = DataLoader(dataset=train_data, batch_size=len(
+            train_data), drop_last=False, collate_fn=collate_func)
+        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(
+            valid_data), drop_last=False, collate_fn=collate_func)
+        model = WordDisambiguationNet(
+            bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
+        # logging.info(model)
+        utils.load_checkpoint(os.path.join(
+            self.model_dir, "best.pth.tar"), model)
         model.to(device=device)
         model.eval()
         avg_cosine0, avg_cosine1 = None, None
@@ -466,7 +489,8 @@ class Job:
             for batch in train_dataloader:
                 sentences1, ranges1, sentences2, ranges2, inputY = batch
                 inputY = inputY.to(device)
-                cosines = model._get_similarity(sentences1,ranges1,sentences2,ranges2)
+                cosines = model._get_similarity(
+                    sentences1, ranges1, sentences2, ranges2)
                 cosines = cosines.detach().cpu().numpy().squeeze()
                 y_true = inputY.detach().cpu().numpy().squeeze()
                 avg_class_0, avg_class_1 = [], []
@@ -486,8 +510,9 @@ class Job:
             # 验证:
             for batch in valid_dataloader:
                 y_true, y_pred = [], []
-                sentences1,ranges1,sentences2,ranges2,inputY = batch
-                cosines = model._get_similarity(sentences1,ranges1,sentences2,ranges2)
+                sentences1, ranges1, sentences2, ranges2, inputY = batch
+                cosines = model._get_similarity(
+                    sentences1, ranges1, sentences2, ranges2)
                 cosines = cosines.detach().cpu().numpy().squeeze()
                 for cosine in cosines:
                     if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
@@ -495,65 +520,65 @@ class Job:
                     else:
                         y_pred.append(1)
                 y_true = inputY.detach().cpu().numpy().squeeze()
-                f1 = f1_score(y_true,np.array(y_pred))
-                acc = accuracy_score(y_true,np.array(y_pred))
-		        # submis_fold = submis_fold + "_{.3f}".format(acc)
-            logging.info("rand_seed:{},knn few-shot 在验证集上 f1:{}, acc:{}".format(self.seed,f1,acc))
+                f1 = f1_score(y_true, np.array(y_pred))
+                acc = accuracy_score(y_true, np.array(y_pred))
+                # submis_fold = submis_fold + "_{.3f}".format(acc)
+            logging.info(
+                "knn few-shot 在验证集上 f1:{}, acc:{}".format(self.seed, f1, acc))
 
             # 预测并提交:
-            for json_fold in os.listdir(self.test_fold):
-                for f in os.listdir(os.path.join(self.test_fold,json_fold)):
-                    json_file = os.path.join(self.test_fold,json_fold,f)
-                    if json_file.endswith(".data") == False:
-                        continue
-                    label_file = os.path.join(submis_fold,json_fold,f[0:-5]+".gold")
-                    if os.path.exists(os.path.join(submis_fold,json_fold)) == False:
-                        os.makedirs(os.path.join(submis_fold,json_fold))
-                    texts,ids = load_text_json(json_file)
-                    for id_name, text in tqdm(zip(ids,texts)):
-                        sentences1,ranges1,sentences2,ranges2 = text
-                        cosine = model._get_similarity([sentences1],[ranges1],[sentences2],[ranges2])
-                        cosine = cosine.detach().cpu().numpy().squeeze()
-                        # print("cosine:{}".format(cosine))
-                        if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
-                            label = "F"
-                        else:
-                            label = "T"
-                        result_list.append({"id":id_name,"tag":label})
-                    with open(label_file,"w") as f:
-                        json.dump(result_list,f,ensure_ascii=False,indent=4)
+            # for json_fold in os.listdir(self.test_fold):
+            #     for f in os.listdir(os.path.join(self.test_fold,json_fold)):
+            #         json_file = os.path.join(self.test_fold,json_fold,f)
+            #         if json_file.endswith(".data") == False:
+            #             continue
+            #         label_file = os.path.join(submis_fold,json_fold,f[0:-5]+".gold")
+            #         if os.path.exists(os.path.join(submis_fold,json_fold)) == False:
+            #             os.makedirs(os.path.join(submis_fold,json_fold))
+            #         texts,ids = load_text_json(json_file)
+            #         for id_name, text in tqdm(zip(ids,texts)):
+            #             sentences1,ranges1,sentences2,ranges2 = text
+            #             cosine = model._get_similarity([sentences1],[ranges1],[sentences2],[ranges2])
+            #             cosine = cosine.detach().cpu().numpy().squeeze()
+            #             # print("cosine:{}".format(cosine))
+            #             if abs(cosine - avg_cosine0) <= abs(cosine - avg_cosine1):
+            #                 label = "F"
+            #             else:
+            #                 label = "T"
+            #             result_list.append({"id":id_name,"tag":label})
+            #         with open(label_file,"w") as f:
+            #             json.dump(result_list,f,ensure_ascii=False,indent=4)
 
     def train(self):
         # self.trainX, self.trainY, self.validX, self.validY = split_dataSet(self.train_fold,self.dev_fold,mode='v2')
-        validX,validY = self.valid_set['en-en']
-        logging.info("训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(validY)))
+        validX, validY = self.valid_set['en-en']
+        logging.info("训练集样本数:{},验证集样本数:{}".format(
+            len(self.trainY), len(validY)))
         # self.trainX,self.trainY = load_dataSet(self.train_text_json,self.train_label_json)
         # self.validX,self.validY = load_dataSet(self.valid_text_json,self.valid_label_json)
-
         train_data = MyData.from_list(self.trainX, self.trainY)
-        # print("train_data:{}".format(train_data[0]))
         valid_data = MyData.from_list(validX, validY)
         train_dataloader = DataLoader(dataset=train_data, sampler=RandomSampler(
-            train_data), batch_size=self.batch_size, shuffle=False, num_workers=4, drop_last=False,collate_fn=collate_func,pin_memory=True)
-
+            train_data), batch_size=self.batch_size, shuffle=False, num_workers=4, drop_last=False, collate_fn=collate_func, pin_memory=True)
         valid_dataloader = DataLoader(
-            dataset=valid_data, batch_size=self.batch_size, shuffle=False, num_workers=0,collate_fn=collate_func,drop_last=False)
+            dataset=valid_data, batch_size=self.batch_size, shuffle=False, num_workers=0, collate_fn=collate_func, drop_last=False)
         model = WordDisambiguationNet(
             bert_model=self.bert_model, bert_tokenizer=self.bert_tokenizer, in_features=self.in_features)
         model.to(device=self.device)
-        XLMRoberta_params = list(map(id,model.bert_model.parameters()))
-        base_params = filter(lambda p:id(p) not in XLMRoberta_params,model.parameters())
+        XLMRoberta_params = list(map(id, model.bert_model.parameters()))
+        base_params = filter(lambda p: id(
+            p) not in XLMRoberta_params, model.parameters())
 
         optimizer = torch.optim.SGD(
             [
-                {"params":model.bert_model.parameters(),"lr":4e-5},
-                {"params":base_params},
+                {"params": model.bert_model.parameters(), "lr": 4e-5},
+                {"params": base_params},
             ],
-            momentum=0.95,weight_decay=0.01,lr=0.001
+            momentum=0.95, weight_decay=0.01, lr=0.001
         )
         # optimizer = torch.optim.AdamW(
         #     optimizer_grouped_parameters, lr=self.lr, eps=1e-8)
-
+        logging.info("加载数据完成,开始训练模型...")
         lr_scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=self.warm_ratio*(self.epoches*len(train_dataloader)), num_training_steps=self.epoches*len(train_dataloader))
 
@@ -570,12 +595,15 @@ class Job:
 
     def model_test(self):
         device = utils.get_device()
-        for name,(validX,validY) in self.test_set.items():
-            logging.info("zero-shot 在DEV Testing {} 上的表现...")
-            valid_data = MyData.from_list(validX,validY)
-            valid_dataloader = DataLoader(dataset=valid_data, batch_size=10, shuffle=False, num_workers=0, drop_last=False,collate_fn=collate_func)
-            model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
-            utils.load_checkpoint(os.path.join(self.model_dir, "best.pth.tar"), model)
+        for name, (validX, validY) in self.test_set.items():
+            # logging.info("zero-shot 在DEV Testing {} 上的表现...")
+            valid_data = MyData.from_list(validX, validY)
+            valid_dataloader = DataLoader(
+                dataset=valid_data, batch_size=10, shuffle=False, num_workers=0, drop_last=False, collate_fn=collate_func)
+            model = WordDisambiguationNet(
+                bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
+            utils.load_checkpoint(os.path.join(
+                self.model_dir, "best.pth.tar"), model)
             model.to(device=device)
             model.eval()
             y_preds, y_trues = [], []
@@ -583,23 +611,27 @@ class Job:
                 for batch in valid_dataloader:
                     sentences1, ranges1, sentences2, ranges2, inputY = batch
                     inputY = inputY.to(device)
-                    output_batch = model(sentences1, ranges1, sentences2, ranges2)
-                    y_pred = np.argmax(output_batch.detach().cpu().numpy(), axis=1).squeeze()
+                    output_batch = model(
+                        sentences1, ranges1, sentences2, ranges2)
+                    y_pred = np.argmax(
+                        output_batch.detach().cpu().numpy(), axis=1).squeeze()
                     y_true = inputY.detach().cpu().numpy().squeeze()
                     y_preds.extend(y_pred)
                     y_trues.extend(y_true)
-            logging.info("zero-shot模型在DEV Testing 数据集{}上的性能指标f1:{},acc:{}".format(name,f1_score(y_trues,y_preds), accuracy_score(y_trues, y_preds)))
-
-
+            logging.info("zero-shot模型在DEV Testing 数据集{}上的性能指标f1:{},acc:{}".format(
+                name, f1_score(y_trues, y_preds), accuracy_score(y_trues, y_preds)))
 
     def evaluate(self):
         device = utils.get_device()
-        _,_,validX,validY = split_trailSet(self.trial_fold)
-        valid_data = MyData.from_list(validX,validY)
+        _, _, validX, validY = split_trailSet(self.trial_fold)
+        valid_data = MyData.from_list(validX, validY)
         # logging.info("finetune训练集样本数:{},验证集样本数:{}".format(len(self.trainY),len(self.validY)))
-        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(valid_data), shuffle=False, num_workers=0, drop_last=False,collate_fn=collate_func)
-        model = WordDisambiguationNet(bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
-        utils.load_checkpoint(os.path.join(self.model_dir, "best.pth.tar"), model)
+        valid_dataloader = DataLoader(dataset=valid_data, batch_size=len(
+            valid_data), shuffle=False, num_workers=0, drop_last=False, collate_fn=collate_func)
+        model = WordDisambiguationNet(
+            bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=768)
+        utils.load_checkpoint(os.path.join(
+            self.model_dir, "best.pth.tar"), model)
         model.to(device=device)
         model.eval()
         with torch.no_grad():
@@ -607,45 +639,54 @@ class Job:
                 sentences1, ranges1, sentences2, ranges2, inputY = batch
                 inputY = inputY.to(device)
                 output_batch = model(sentences1, ranges1, sentences2, ranges2)
-                y_pred = np.argmax(output_batch.detach().cpu().numpy(), axis=1).squeeze()
+                y_pred = np.argmax(
+                    output_batch.detach().cpu().numpy(), axis=1).squeeze()
                 y_true = inputY.detach().cpu().numpy().squeeze()
-                print("--trial测试集上的性能指标f1:{},acc:{}".format(f1_score(y_true,y_pred), accuracy_score(y_true, y_pred)))
+                print("--trial测试集上的性能指标f1:{},acc:{}".format(f1_score(y_true,
+                                                                     y_pred), accuracy_score(y_true, y_pred)))
 
-   
-    def predict(self,best_model_dir,outfold):
-        model = WordDisambiguationNet(bert_model=bert_model,bert_tokenizer=bert_tokenizer,in_features=self.in_features)
-        utils.load_checkpoint(os.path.join(best_model_dir, "best.pth.tar"), model)
+    def predict(self, best_model_dir, outfold):
+        model = WordDisambiguationNet(
+            bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=self.in_features)
+        utils.load_checkpoint(os.path.join(
+            best_model_dir, "best.pth.tar"), model)
         model.to(device=self.device)
         model.eval()
         result_list = []
         with torch.no_grad():
             for fold in os.listdir(self.test_fold):
                 # print("fold:{}".format(fold))
-                newfold = os.path.join(outfold,fold)
-                if os.path.exists(newfold)==False:
+                newfold = os.path.join(outfold, fold)
+                if os.path.exists(newfold) == False:
                     os.makedirs(newfold)
-                for files in os.listdir(os.path.join(self.test_fold,fold)):
-                    text_json = os.path.join(self.test_fold,fold,files)
+                for files in os.listdir(os.path.join(self.test_fold, fold)):
+                    text_json = os.path.join(self.test_fold, fold, files)
                     if text_json.endswith('.data'):
                         # print("text_json:{}".format(text_json))
-                        texts,ids = load_text_json(text_json)
-                        for id_name, text in tqdm(zip(ids,texts)):
+                        texts, ids = load_text_json(text_json)
+                        for id_name, text in tqdm(zip(ids, texts)):
                             # print("text:{}".format(text))
-                            (sentence1,ranges1,sentence2,ranges2) = text
-                            output = model([sentence1],[ranges1],[sentence2],[ranges2])
-                            y_pred = np.argmax(output.detach().cpu().numpy(),axis=1).squeeze()
+                            (sentence1, ranges1, sentence2, ranges2) = text
+                            output = model([sentence1], [ranges1], [
+                                           sentence2], [ranges2])
+                            y_pred = np.argmax(
+                                output.detach().cpu().numpy(), axis=1).squeeze()
                             label = "T" if y_pred == 1 else "F"
-                            result_list.append({"id":id_name,"tag":label})
-                        with open(os.path.join(newfold,files[0:-5]+".gold"),"w") as f:
-                            json.dump(result_list,f,ensure_ascii=False,indent=4)
+                            result_list.append({"id": id_name, "tag": label})
+                        with open(os.path.join(newfold, files[0:-5]+".gold"), "w") as f:
+                            json.dump(result_list, f,
+                                      ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
     # for seed in [2020,1234,6893,4568,2235]:
     job = Job(seed=4568)
-    job.train()
-    job.model_test()
-    job.predict(job.model_dir,"test_zero_shot_v3")
+    # job.train()
+    # job.model_test()
+    # job.predict(job.model_dir, "test_zero_shot_v3")
+
+    job.finetune()
+    job.few_shot_train()
     # job.few_shot_train("test_few_shot_knn_{}".format(seed))
     # job.evaluate()
     # froze_mode = 'unfroze_fc'

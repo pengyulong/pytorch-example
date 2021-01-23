@@ -99,7 +99,7 @@ class CVRJob(object):
 
         # trainX, trainY, testX, testY
 
-        trainX_continue_features, trainY, testX_continue_features, testY = split_dataSet(
+        trainX_continue_features, trainY, validX_continue_features, validY = split_dataSet(
             dataSet[self.continue_feature_names], dataSet[self.target])
 
         logging.info('归一化结束')
@@ -114,6 +114,7 @@ class CVRJob(object):
             dataSet[self.user_id_feature_names], dataSet[self.target])
         train_user_gbdt_feats, valid_user_gbdt_feats, user_gbdt_feats_name = gbdt_select_features(
             trainX, trainY, testX, testY)
+        logging.info("gbdt 对user-id 选择的特征:{}".format(user_gbdt_feats_name))
 
         logging.info('开始对ad-ID类特征进行one-hot编码...')
         for col in self.ad_id_feature_names:
@@ -125,5 +126,72 @@ class CVRJob(object):
             dataSet[self.ad_id_feature_names], dataSet[self.target])
         train_ad_gbdt_feats, valid_ad_gbdt_feats, ad_gbdt_feats_name = gbdt_select_features(
             trainX, trainY, testX, testY)
+        logging.info("gbdt 对user-id 选择的特征:{}".format(ad_gbdt_feats_name))
+        train_features = pd.concat([trainX_continue_features,train_user_gbdt_feats,train_ad_gbdt_feats])
+        valid_features = pd.concat([validX_continue_features,valid_user_gbdt_feats,valid_ad_gbdt_feats])
+        lr = LogisticRegression()
+        lr.fit(train_features, trainY)
+        tr_logloss = log_loss(trainY, lr.predict_proba(train_features)[:, 1])
+        logging.info('tr-logloss: ', tr_logloss)
+        val_logloss = log_loss(validY, lr.predict_proba(valid_features)[:, 1])
+        logging.info('val-logloss: ', val_logloss)
 
-# def preProcess():
+    def gbdt_lr_cvr_task2(self):
+        """
+        使用稀疏类特征和密集类特征构建树模型:
+        """
+        # 加载数据
+        dataSet = pd.read_csv(self.csvfile, sep='|')
+        # 归一化
+        logging.info('开始对连续特征归一化...')
+        scaler = MinMaxScaler()
+        for col in self.continue_feature_names:
+            dataSet[col] = scaler.fit_transform(
+                dataSet[col].values.reshape(-1, 1))
+
+        # trainX, trainY, testX, testY
+
+        trainX_continue_features, trainY, validX_continue_features, validY = split_dataSet(
+            dataSet[self.continue_feature_names], dataSet[self.target])
+
+        logging.info('归一化结束')
+        # one-hot 编码
+        logging.info('开始对稀疏类特征进行one-hot编码...')
+        for col in self.sparse_feature_names:
+            onehot_feats = pd.get_dummies(dataSet[col], prefix=col)
+            dataSet.drop([col], axis=1, inplace=True)
+            dataSet = pd.concat([dataSet, onehot_feats], axis=1)
+        logging.info('对稀疏类特征进行one-hot编码结束...')
+        trainX, trainY, testX, testY = split_dataSet(
+            dataSet[self.sparse_feature_names], dataSet[self.target])
+        train_sparse_gbdt_feats, valid_sparse_gbdt_feats, sparse_gbdt_feats_name = gbdt_select_features(
+            trainX, trainY, testX, testY)
+        logging.info("gbdt 对稀疏类特征树选择的特征:{}".format(sparse_gbdt_feats_name))
+
+        logging.info('开始对密集类特征进行one-hot编码...')
+        for col in self.dense_feature_names:
+            onehot_feats = pd.get_dummies(dataSet[col], prefix=col)
+            dataSet.drop([col], axis=1, inplace=True)
+            dataSet = pd.concat([dataSet, onehot_feats], axis=1)
+        logging.info('密集类特征one-hot编码结束...')
+        trainX, trainY, testX, testY = split_dataSet(
+            dataSet[self.ad_id_feature_names], dataSet[self.target])
+        train_dense_gbdt_feats, valid_dense_gbdt_feats, dense_gbdt_feats_name = gbdt_select_features(
+            trainX, trainY, testX, testY)
+        logging.info("gbdt 对密集类选择的特征:{}".format(dense_gbdt_feats_name))
+
+
+        train_features = pd.concat([trainX_continue_features,train_sparse_gbdt_feats,train_dense_gbdt_feats])
+        valid_features = pd.concat([validX_continue_features,valid_sparse_gbdt_feats,valid_dense_gbdt_feats])
+        lr = LogisticRegression()
+        lr.fit(train_features, trainY)
+        tr_logloss = log_loss(trainY, lr.predict_proba(train_features)[:, 1])
+        logging.info('tr-logloss: ', tr_logloss)
+        val_logloss = log_loss(validY, lr.predict_proba(valid_features)[:, 1])
+        logging.info('val-logloss: ', val_logloss)
+
+
+if __name__ == "__main__":
+    job = CVRJob()
+    job.gbdt_lr_cvr_task1()
+    job.gbdt_lr_cvr_task2()
