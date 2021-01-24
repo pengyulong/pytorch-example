@@ -16,6 +16,8 @@ egs/TextClassify/price_cost_effective/*
 egs/TextClassify/service_parking_convenience/*
 egs/TextClassify/location_distance_from_business_district/*
 egs/TextClassify/__pycach__/*
+egs/TextClassify/holtel_sent/*.txt
+egs/TextClassify/weibo_moods/*.csv
 egs/Regression/data2.xlsx
 utils/__pycach__/*
 model/__pycach__/*
