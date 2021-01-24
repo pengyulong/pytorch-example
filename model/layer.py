@@ -53,6 +53,7 @@ class DPCNN(nn.Module):
         super(DPCNN,self).__init__()
         self.out_channels = filter_num
         self.seq_length = seq_length
+        self.embed_dim = embed_dim
         self.region_layer = nn.Sequential(
             nn.Conv1d(in_channels=embed_dim,out_channels=self.out_channels,kernel_size=3,padding=1),
             nn.BatchNorm1d(num_features=self.out_channels),
@@ -76,7 +77,8 @@ class DPCNN(nn.Module):
         # self.MaxPool = nn.AdaptiveAvgPool1d(1)
 
     def forward(self,inputX):
-        inputX = inputX.unsqueeze(2) #dim = 1
+        # inputX = inputX.unsqueeze(2) #dim = 1
+        assert inputX.shape[2] == self.embed_dim
         inputX = inputX.permute(0,2,1)
         out = self.region_layer(inputX)
         out = self.conv_block(out)

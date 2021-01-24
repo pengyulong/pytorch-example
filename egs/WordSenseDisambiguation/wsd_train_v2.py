@@ -26,7 +26,7 @@ from torchsummary import summary
 
 bert_tokenizer = XLMRobertaTokenizer.from_pretrained(
     'xlm-roberta-base', is_split_into_words=True)
-bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
+bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-large')
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 # model = BertModel.from_pretrained("./model")
 
@@ -730,15 +730,15 @@ class Job:
 
 
 if __name__ == "__main__":
-    # for seed in [2020,1234,6893,4568,2235]:
-    job = Job(seed=4568)
-    # job.train()
-    # job.model_test()
+    for seed in [2020,1234,6893,4568,2235]:
+        job = Job(seed=seed)
+        job.train()
+        job.model_test()
     # job.predict(job.model_dir, "test_zero_shot_v3")
 
-    job.finetune()
-    job.finetune_evaluate()
-    job.few_shot_train()
+    # job.finetune()
+    # job.finetune_evaluate()
+    # job.few_shot_train()
     # job.few_shot_train("test_few_shot_knn_{}".format(seed))
     # job.evaluate()
     # froze_mode = 'unfroze_fc'

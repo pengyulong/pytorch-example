@@ -23,9 +23,9 @@ def loadDataSet(data_dir):
     if data_dir == 'weibo_moods':
         dataSet = pd.read_csv(os.path.join(data_dir,'data.csv'))
     if data_dir == "holtel_sent":
-        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='    ',header=None)
+        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='    ',header=None,engine='python')
         dataSet.columns = ['label','review']
-    trainX, trainY, testX, testY = split_dataSet(dataSet['label'],dataSet['review'])
+    trainX, trainY, testX, testY = split_dataSet(dataSet['review'],dataSet['label'])
     return trainX, trainY, testX, testY
 
 
@@ -46,6 +46,7 @@ class SentimentData(Dataset):
         """
         dataX, dataY = [], []
         for text,label in tqdm(zip(contexts,labels)):
+            # print("text:{},label:{}".format(text,label))
             content = text_filter(text)
             tokens = tokenizer.tokenize(content)
             if len(tokens) >= max_length:
