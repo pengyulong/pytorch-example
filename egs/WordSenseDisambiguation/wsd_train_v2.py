@@ -26,7 +26,7 @@ from torchsummary import summary
 
 bert_tokenizer = XLMRobertaTokenizer.from_pretrained(
     'xlm-roberta-base', is_split_into_words=True)
-bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-large')
+bert_model = XLMRobertaModel.from_pretrained('xlm-roberta-base')
 # tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 # model = BertModel.from_pretrained("./model")
 
@@ -113,6 +113,27 @@ def extract_name(json_file):
 
 
 def split_dataSet(train_fold, dev_fold):
+    trainX, trainY = load_dataSet(os.path.join(
+        train_fold, "training.en-en.data"), os.path.join(train_fold, "training.en-en.gold"))
+    valid_set, test_set, support_set = {}, {}, {}
+    for json_file in os.listdir(dev_fold):
+        if json_file.endswith('.data'):
+            data_json = os.path.join(dev_fold, json_file)
+            tags_json = os.path.join(dev_fold, json_file[0:-5]+".gold")
+            inputX, target = load_dataSet(data_json, tags_json)
+            trainX2, testX2, trainY2, testY2 = train_test_split(
+                inputX, target, test_size=0.2, random_state=0, shuffle=True)
+            language_name = extract_name(json_file)
+            # dev中的每个文件的20% 作为测试集,并带上keywords
+            test_set[language_name] = (testX2, testY2)
+            x_train, x_valid, y_train, y_valid = train_test_split(
+                trainX2, trainY2, test_size=0.25, random_state=0, shuffle=True)
+            valid_set[language_name] = (x_valid,y_valid)
+            support_set[language_name] = (x_train[0:8],y_train[0:8])
+    return trainX, trainY, support_set, valid_set, test_set
+
+
+def split_dataSet3(train_fold, dev_fold):
     trainX, trainY = load_dataSet(os.path.join(
         train_fold, "training.en-en.data"), os.path.join(train_fold, "training.en-en.gold"))
     valid_set, test_set = {}, {}
@@ -421,7 +442,7 @@ class Job:
         self.loss_result = None
         self.warm_ratio = 0.1
         self.model_dir = "End2endXLMRoBertaNet_v3_{}".format(self.seed)
-        self.trainX, self.trainY, self.x_support, self.y_support, self.valid_set, self.test_set = split_dataSet(
+        self.trainX, self.trainY, self.x_support, self.y_support, self.valid_set, self.test_set = split_dataSet3(
             self.train_fold, self.dev_fold)
         utils.setup_seed(seed)
 
@@ -696,51 +717,40 @@ class Job:
                 print("--trial测试集上的性能指标f1:{},acc:{}".format(f1_score(y_true,
                                                                      y_pred), accuracy_score(y_true, y_pred)))
 
-    def predict(self, best_model_dir, outfold):
+    def predict(self,seed,text_json):
+        result_list = []
         model = WordDisambiguationNet(
             bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=self.in_features)
-        utils.load_checkpoint(os.path.join(
-            best_model_dir, "best.pth.tar"), model)
+        utils.load_checkpoint(os.path.join("End2endXLMRoBertaNet_v3_{}".format(seed), "best.pth.tar"), model)
         model.to(device=self.device)
         model.eval()
         result_list = []
         with torch.no_grad():
-            for fold in os.listdir(self.test_fold):
-                # print("fold:{}".format(fold))
-                newfold = os.path.join(outfold, fold)
-                if os.path.exists(newfold) == False:
-                    os.makedirs(newfold)
-                for files in os.listdir(os.path.join(self.test_fold, fold)):
-                    text_json = os.path.join(self.test_fold, fold, files)
-                    if text_json.endswith('.data'):
-                        # print("text_json:{}".format(text_json))
-                        texts, ids = load_text_json(text_json)
-                        for id_name, text in tqdm(zip(ids, texts)):
-                            # print("text:{}".format(text))
-                            (sentence1, ranges1, sentence2, ranges2) = text
-                            output = model([sentence1], [ranges1], [
-                                sentence2], [ranges2])
-                            y_pred = np.argmax(
-                                output.detach().cpu().numpy(), axis=1).squeeze()
-                            label = "T" if y_pred == 1 else "F"
-                            result_list.append({"id": id_name, "tag": label})
-                        with open(os.path.join(newfold, files[0:-5]+".gold"), "w") as f:
-                            json.dump(result_list, f,
-                                      ensure_ascii=False, indent=4)
+            texts, ids = load_text_json(text_json)
+            s1 = [text[0] for text in texts]
+            r1 = [text[1] for text in texts]
+            s2 = [text[2] for text in texts]
+            r2 = [text[3] for text in texts]
+            output = model(s1,r1,s2,r2)
+            y_preds = np.argmax(output.detach().cpu().numpy(), axis=1).squeeze()
+            for i,y_pred in enumerate(y_preds):
+                label = "T" if y_pred == 1 else "F"
+                result_list.append({"id": ids[i], "tag": label})
+        return result_list
+    
+    def submiss_fold(self,output_dir,seed=4568):
+        for json_fold in os.listdir(self.test_fold):
+            if os.path.exists(output_dir) == False:
+                os.makedirs(output_dir)
+            for files in tqdm(os.listdir(os.path.join(self.test_fold,json_fold))):
+                print("files:{}".format(files))
+                json_file = os.path.join(self.test_fold,json_fold,files)
+                gold_file = os.path.join(output_dir,files[0:-5])
+                result_list = self.predict(seed,json_file)
+                with open(gold_file, "w") as f:
+                    json.dump(result_list, f,ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
-    for seed in [2020,1234,6893,4568,2235]:
-        job = Job(seed=seed)
-        job.train()
-        job.model_test()
-    # job.predict(job.model_dir, "test_zero_shot_v3")
-
-    # job.finetune()
-    # job.finetune_evaluate()
-    # job.few_shot_train()
-    # job.few_shot_train("test_few_shot_knn_{}".format(seed))
-    # job.evaluate()
-    # froze_mode = 'unfroze_fc'
-    # job.finetune(mode=froze_mode)
-    # job.predict("test_v2_finetune_{}".format(froze_mode))
+    job = Job(seed=4568)
+    job.submiss_fold("Zero_Shot_XLMRoberta_base_v1_test_submission",job.seed)

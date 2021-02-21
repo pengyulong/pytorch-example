@@ -36,17 +36,35 @@
   * residence 用户的常住省
   * emui_dev EMUI版本
 
+### 特征分类:
+  ```Python
+    # 用户类特征
+    'user_id_features': ['city', 'city_rank', 'device_name', 'device_size', 'career', 'gender', 'net_type', 'residence', 'emui_dev'],
+    # 广告类特征
+    'ad_id_features': ['task_id', 'adv_id', 'creat_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name'],  # 广告类特征
+    # 数值类特征
+    'continue_features': ['age', 'app_score', 'list_time', 'device_price', 'communication_onlinerate', 'communication_avgonline_30d'],
+    # 稀疏类特征
+    'sparse_features': ['city', 'communication_onlinerate', 'task_id', 'adv_id'],
+    # 密集类特征
+    'dense_features': ['city_rank', 'device_name', 'device_size', 'career', 'gender', 'net_type', 'residence', 'emui_dev', 'creat_type_cd', 'adv_prim_id', 'dev_id', 'inter_type_cd', 'spread_app_id', 'tags', 'app_first_class', 'app_second_class', 'indu_name']
+  ```
+
 ### 机器学习模型:
-- `baseline`模型:对所有非连续类特征进行one-hot编码与连续类特征进行组合输入到`lr`模型中:
-- `lightgbm`模型:对所有非连续类特征进行one-hot编码与连续类特征进行组合输入到`lightgbm`模型中:
-- 使用特征分组建立树模型,树模型选取lightgbm
-  * **用户ID类特征**建立`树模型1`,**广告ID类特征**建立`树模型2`,并从这两类特征中选取重要性较高的特征与**数值类特征**组合输入到`LR`模型中进行预测
-  * **稀疏类特征**建立`树模型1`,**密集类特征**建立`树模型2`,并从这两类特征中选取重要性较高的特征与**数值类特征**组合输入到`LR`名中进行预测
-
-- 比较两种建模方式的优劣,评价指标是验证集上的`logloss`,`auc`
-  <!-- |树模型1|树模型2| -->
-
+- 方法A:使用`lightgbm`模型单独建模:对所有非连续类特征进行one-hot编码与连续类特征进行组合输入到`lightgbm`模型中:
+- 方法B:使用业务类型对特征进行分组**用户ID类特征**建立`树模型1`,**广告ID类特征**建立`树模型2`,并从这两类特征中选取重要性较高的特征与**数值类特征**组合输入到`LR`模型中进行预测
+- 方法C:按照稀疏程度对特征进行分组**稀疏类特征**建立`树模型1`,**密集类特征**建立`树模型2`,并从这两类特征中选取重要性较高的特征与**数值类特征**组合输入到`LR`名中进行预测
+- 比较三种建模方式的优劣,评价指标是验证集上的`logloss`,`auc`和训练时间`time`:
+  | 方法 | train-logloss | train-auc | valid-logloss | valid-auc |time|
+  |-----|---------------|------------|---------------|----------|-----|
+  | A | 0.419|0.645|0.421|0.643|187|
+  | B | 0.417|0.645|0.418|0.644|167|
+  | C | 0.420|0.638|0.422|0.637|246|
 ### Wide&Deep 模型:
-- 模型架构
-- 模型训练
-- 模型评测指标
+- 模型架构:
+- 模型训练:
+- 模型评测指标:
+## DeepFM模型:
+- 模型架构:
+- 模型训练:
+- 模型评测指标:

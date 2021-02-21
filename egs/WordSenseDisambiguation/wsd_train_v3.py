@@ -696,45 +696,53 @@ class Job:
                 print("--trial测试集上的性能指标f1:{},acc:{}".format(f1_score(y_true,
                                                                      y_pred), accuracy_score(y_true, y_pred)))
 
-    def predict(self, best_model_dir, outfold):
+
+    def predict(self,seed,text_json):
+        result_list = []
         model = WordDisambiguationNet(
             bert_model=bert_model, bert_tokenizer=bert_tokenizer, in_features=self.in_features)
-        utils.load_checkpoint(os.path.join(
-            best_model_dir, "best.pth.tar"), model)
+        utils.load_checkpoint(os.path.join("Zero_Shot_XLMRoberta_Large/End2endXLMRoBertaNet_large_{}".format(seed), "best.pth.tar"), model)
         model.to(device=self.device)
         model.eval()
         result_list = []
         with torch.no_grad():
-            for fold in os.listdir(self.test_fold):
-                # print("fold:{}".format(fold))
-                newfold = os.path.join(outfold, fold)
-                if os.path.exists(newfold) == False:
-                    os.makedirs(newfold)
-                for files in os.listdir(os.path.join(self.test_fold, fold)):
-                    text_json = os.path.join(self.test_fold, fold, files)
-                    if text_json.endswith('.data'):
-                        # print("text_json:{}".format(text_json))
-                        texts, ids = load_text_json(text_json)
-                        for id_name, text in tqdm(zip(ids, texts)):
-                            # print("text:{}".format(text))
-                            (sentence1, ranges1, sentence2, ranges2) = text
-                            output = model([sentence1], [ranges1], [
-                                sentence2], [ranges2])
-                            y_pred = np.argmax(
-                                output.detach().cpu().numpy(), axis=1).squeeze()
-                            label = "T" if y_pred == 1 else "F"
-                            result_list.append({"id": id_name, "tag": label})
-                        with open(os.path.join(newfold, files[0:-5]+".gold"), "w") as f:
-                            json.dump(result_list, f,
-                                      ensure_ascii=False, indent=4)
+            texts, ids = load_text_json(text_json)
+            s1 = [text[0] for text in texts]
+            r1 = [text[1] for text in texts]
+            s2 = [text[2] for text in texts]
+            r2 = [text[3] for text in texts]
+            output = model(s1,r1,s2,r2)
+            y_preds = np.argmax(output.detach().cpu().numpy(), axis=1).squeeze()
+            for i,y_pred in enumerate(y_preds):
+                label = "T" if y_pred == 1 else "F"
+                result_list.append({"id": ids[i], "tag": label})
+        return result_list
+    
+    def submiss_fold(self,output_dir):
+        for json_fold in os.listdir(self.test_fold):
+            if os.path.exists(output_dir) == False:
+                os.makedirs(output_dir)
+            for files in os.listdir(os.path.join(self.test_fold,json_fold)):
+                json_file = os.path.join(self.test_fold,json_fold,files)
+                gold_file = os.path.join(output_dir,files[0:-5])
+                name = extract_name(files)
+                if name in ['en-en','ar-ar','en-ar']:
+                    seed = 4568
+                elif name in ['fr-fr','ru-ru','en-fr','en-ru']:
+                    seed = 6893
+                else:
+                    seed = 1234
+                result_list = self.predict(seed,json_file)
+                with open(gold_file, "w") as f:
+                    json.dump(result_list, f,ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
-    for seed in [2020,1234,6893,4568,2235]:
-        job = Job(seed=seed)
-        job.train()
-        job.model_test()
-    # job.predict(job.model_dir, "test_zero_shot_v3")
+    # for seed in [2020,1234,6893,4568,2235]:
+    job = Job(seed=4568)
+    # job.train()
+    # job.model_test()
+    job.submiss_fold( "Zero_Shot_XLMRoberta_large_v1_test_submission")
 
     # job.finetune()
     # job.finetune_evaluate()
