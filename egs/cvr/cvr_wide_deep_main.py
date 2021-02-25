@@ -4,14 +4,18 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 import lightgbm as lgb
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, LabelEncoder
-from sklearn.metrics import log_loss,roc_curve,auc
+from sklearn.metrics import log_loss,roc_curve,auc,roc_auc_score
+from deepctr_torch.inputs import SparseFeat, DenseFeat, get_feature_names
+from deepctr_torch.models import DeepFM,WDL,xDeepFM
 import gc
 from scipy import sparse
 from sklearn.model_selection import train_test_split
-from utils import set_logger, setup_seed
+from utils import set_logger, setup_seed, get_device
 import logging
 import warnings
+import math
 warnings.filterwarnings('ignore')
+
 setup_seed(2021)
 
 project_config = {
@@ -33,6 +37,12 @@ def split_dataSet(inputX, target, test_size=0.2):
         inputX, target, test_size=test_size, random_state=0)
     return trainX, trainY, testX, testY
 
+def eval_log_loss(y_true,y_pred):
+    summ = 0.0
+    for y1,y2 in zip(y_true,y_pred):
+        summ -= (y1*math.log(y2)+(1-y1)*math.log(1-y2))
+    return summ / len(y_true)
+
 
 class CVRJob(object):
     def __init__(self, project_config=project_config):
@@ -48,7 +58,48 @@ class CVRJob(object):
         #     ['label', 'consume_purchase'], axis=1), self.dataSet[self.target], test_size=0.2, random_state=0)
         self.log_file = set_logger("./train.log")
 
-    def train(self):
-        pass
+    def start_work(self):
+        data = pd.read_csv(self.csvfile,sep='|')
+        sparse_features = self.user_id_feature_names + self.ad_id_feature_names
+        dense_features = self.continue_feature_names
 
-    
+
+        target = [self.target]
+        data[sparse_features] = data[sparse_features].fillna('-1',)
+        data[dense_features] = data[dense_features].fillna(0,)
+
+        for feat in sparse_features:
+            lbe = LabelEncoder()
+            data[feat] = lbe.fit_transform(data[feat])
+        mms = MinMaxScaler(feature_range=(0,1))
+        data[dense_features] = mms.fit_transform(data[dense_features])
+
+        fixlen_feature_columns = [SparseFeat(feat,data[feat].nunique()) for feat in sparse_features] + [DenseFeat(feat,1,) for feat in dense_features]
+
+        dnn_feature_columns = fixlen_feature_columns
+        linear_feature_columns = fixlen_feature_columns
+
+        feature_names = get_feature_names(linear_feature_columns + dnn_feature_columns)
+
+        train, test = train_test_split(data,test_size=0.2,random_state=2021)
+
+        train_model_input = {name:train[name] for name in feature_names}
+        test_model_input = {name:test[name] for name in feature_names}
+
+        device = get_device()
+
+        model = xDeepFM(linear_feature_columns=linear_feature_columns,dnn_feature_columns = dnn_feature_columns,task='binary',l2_reg_embedding=1e-5,device=device)
+
+        model.compile("adagrad","binary_crossentropy",metrics=['logloss','auc'])
+
+        history = model.fit(train_model_input,train[target].values,batch_size=1024,epochs=20,validation_split=0.2,verbose=2)
+
+        pred_ans = model.predict(test_model_input,1024)
+
+        print("test LogLoss: ",round(log_loss(test[target].values,pred_ans),4))
+        print("test AUC: ",round(roc_auc_score(test[target].values,pred_ans),4))
+
+
+if __name__ == "__main__":
+    job = CVRJob()
+    job.start_work()
