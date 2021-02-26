@@ -14,9 +14,43 @@ from utils import set_logger, setup_seed, get_device
 import logging
 import warnings
 import math
+import matplotlib.pyplot as plt
+import os
+import matplotlib
+matplotlib.use("Agg")
 warnings.filterwarnings('ignore')
-
 setup_seed(2021)
+
+
+
+def draw_figure(train_log,valid_log,png_file,variable='logloss'):
+    fig1 = plt.figure()
+    plt.plot(range(1,len(train_log)+1),train_log,label="Training {}".format(variable))
+    plt.plot(range(1,len(valid_log)+1),valid_log,label="Validation {}".format(variable))
+    plt.ylim(0,1)
+    plt.xlim(0,len(train_log)+1)
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    fig1.savefig(png_file,bbox_inches='tight',dpi=300)
+
+def draw_loss(loss_fold):
+    models = ['deepfm','wdl','xdeepfm']
+    for model in models:
+        xlsfile = os.path.join(loss_fold,"train_val_log_{}.xlsx".format(model))
+        if os.path.exists(xlsfile) == False:
+            continue
+        data = pd.read_excel(xlsfile)
+        train_loss = data['logloss']
+        valid_loss = data['val_logloss']
+        png_file = os.path.join(loss_fold,"{}_logloss.png".format(model))
+        draw_figure(train_loss,valid_loss,png_file,variable='logloss')
+
+        train_auc = data['auc']
+        valid_auc = data['val_auc']
+        png_file = os.path.join(loss_fold,"{}_auc.png".format(model))
+        draw_figure(train_auc,valid_auc,png_file,variable='auc')
+
 
 project_config = {
     'csvfile': "train_data_final2.csv",
@@ -92,14 +126,18 @@ class CVRJob(object):
 
         model.compile("adagrad","binary_crossentropy",metrics=['logloss','auc'])
 
-        history = model.fit(train_model_input,train[target].values,batch_size=1024,epochs=20,validation_split=0.2,verbose=2)
+        history, train_logs = model.fit(train_model_input,train[target].values,batch_size=1024,epochs=20,validation_split=0.2,verbose=2)
 
         pred_ans = model.predict(test_model_input,1024)
+
+        df = pd.DataFrame(data=train_logs)
+        df.to_excel("./result/train_val_log.xlsx")
 
         print("test LogLoss: ",round(log_loss(test[target].values,pred_ans),4))
         print("test AUC: ",round(roc_auc_score(test[target].values,pred_ans),4))
 
 
 if __name__ == "__main__":
-    job = CVRJob()
-    job.start_work()
+    # job = CVRJob()
+    # job.start_work()
+    draw_loss("./result")

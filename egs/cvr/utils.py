@@ -125,7 +125,7 @@ def precision(y_pred,y_true):
     # y_true = np.argmax(y_true,axis=1)
     return precision_score(y_pred=y_pred,y_true=y_true,average='macro')
 
-class EarlyStopping:
+class EarlyStopping(object):
     """Early stops the training if validation loss doesn't improve after a given patience."""
     def __init__(self, patience=7, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
         """
