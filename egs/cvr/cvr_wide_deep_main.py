@@ -115,29 +115,29 @@ class CVRJob(object):
 
         feature_names = get_feature_names(linear_feature_columns + dnn_feature_columns)
 
-        train, test = train_test_split(data,test_size=0.2,random_state=2021)
+        train, test = train_test_split(data,test_size=0.1,random_state=2021)
 
         train_model_input = {name:train[name] for name in feature_names}
         test_model_input = {name:test[name] for name in feature_names}
 
         device = get_device()
 
-        model = xDeepFM(linear_feature_columns=linear_feature_columns,dnn_feature_columns = dnn_feature_columns,task='binary',l2_reg_embedding=1e-5,device=device)
+        model = xDeepFM(linear_feature_columns=linear_feature_columns,dnn_feature_columns = dnn_feature_columns,task='binary',l2_reg_embedding=1e-4,device=device)
 
         model.compile("adagrad","binary_crossentropy",metrics=['logloss','auc'])
 
-        history, train_logs = model.fit(train_model_input,train[target].values,batch_size=1024,epochs=20,validation_split=0.2,verbose=2)
+        history, train_logs = model.fit(train_model_input,train[target].values,batch_size=1024,epochs=20,validation_split=0.1,verbose=2)
 
         pred_ans = model.predict(test_model_input,1024)
 
         df = pd.DataFrame(data=train_logs)
-        df.to_excel("./result/train_val_log.xlsx")
+        df.to_excel("./result/train_val_log_xdeepfm.xlsx")
 
         print("test LogLoss: ",round(log_loss(test[target].values,pred_ans),4))
         print("test AUC: ",round(roc_auc_score(test[target].values,pred_ans),4))
 
 
 if __name__ == "__main__":
-    # job = CVRJob()
-    # job.start_work()
-    draw_loss("./result")
+    job = CVRJob()
+    job.start_work()
+    # draw_loss("./result")

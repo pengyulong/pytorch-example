@@ -322,7 +322,7 @@ class CVRJob(object):
 
 if __name__ == "__main__":
     job = CVRJob()
-    # job.lr_cvr()
-    job.gbdt_cvr()
-    job.gbdt_lr_cvr_task1()
-    job.gbdt_lr_cvr_task2()
+    job.lr_cvr()
+    #job.gbdt_cvr()
+    #job.gbdt_lr_cvr_task1()
+    #job.gbdt_lr_cvr_task2()

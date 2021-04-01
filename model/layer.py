@@ -18,7 +18,7 @@ class Attention(nn.Module):
 
     def forward(self,hidden):
         M = torch.tanh(hidden) # B*L*D
-        U = torch.matmul(M,self.W).squeeze(2)
+        U = torch.matmul(M,self.weight).squeeze(2)
         E = torch.softmax(U,dim=1) # B*L
         # E(B,1,L)*(B,L,D) = (B,1,D)->(B,D)
         O = torch.bmm(E.unsqueeze(1),M).squeeze(1)
@@ -54,11 +54,12 @@ class DPCNN(nn.Module):
         self.out_channels = filter_num
         self.seq_length = seq_length
         self.embed_dim = embed_dim
+        self.num_class = num_class
         self.region_layer = nn.Sequential(
             nn.Conv1d(in_channels=embed_dim,out_channels=self.out_channels,kernel_size=3,padding=1),
             nn.BatchNorm1d(num_features=self.out_channels),
             nn.ReLU(inplace=True),
-            nn.Dropout(0.5)   
+            nn.Dropout(0.2)   
         )
         self.conv_block = nn.Sequential(
             nn.BatchNorm1d(num_features=self.out_channels),
@@ -69,12 +70,19 @@ class DPCNN(nn.Module):
             nn.Conv1d(in_channels=self.out_channels,out_channels=self.out_channels,kernel_size=3,padding=1)
         )
         resnet_block_list = []
-        while self.seq_length > 3:
+        while self.seq_length > 2:
             resnet_block_list.append(ResnetBlock(self.out_channels))
+            # print("seq_length:{}".format(self.seq_length))
             self.seq_length = self.seq_length//2
         self.resnet_layer = nn.Sequential(*resnet_block_list)
-        self.MaxPool = nn.AdaptiveMaxPool1d(1)
-        # self.MaxPool = nn.AdaptiveAvgPool1d(1)
+
+        self.fc_layer = nn.Sequential(
+            nn.Linear(self.out_channels*self.seq_length, self.num_class),
+            nn.BatchNorm1d(self.num_class),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(self.num_class,self.num_class)
+        )
 
     def forward(self,inputX):
         # inputX = inputX.unsqueeze(2) #dim = 1
@@ -83,9 +91,8 @@ class DPCNN(nn.Module):
         out = self.region_layer(inputX)
         out = self.conv_block(out)
         out = self.resnet_layer(out)
-        out = self.MaxPool(out)
-        # print("out's shape:{}".format(out.shape))
-        return out
+        out = out.contiguous().view(inputX.shape[0], -1)
+        return self.fc_layer(out)
 
 
 

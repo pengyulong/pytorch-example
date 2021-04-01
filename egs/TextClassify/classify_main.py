@@ -15,15 +15,30 @@ from utils import get_device,train_and_evaluate,save_dict_to_json,save_result_di
 from model import BertSequenceClassfier,BertEncoderClassfier
 import matplotlib.pyplot as plt
 import matplotlib
+import logging
 
 matplotlib.use("Agg")
 setup_seed(2020)
 
 def loadDataSet(data_dir):
-    if data_dir == 'weibo_moods':
-        dataSet = pd.read_csv(os.path.join(data_dir,'data.csv'))
+    if data_dir == 'aclImdb_v1':
+        reviews, labels = [], []
+        for parent, folds, filename in os.walk(data_dir):
+            for f in filename:
+                txtfile = os.path.join(parent,f)
+                if txtfile.endswith('.txt') == False:
+                    continue
+                with open(txtfile,'r',encoding='utf-8') as f:
+                    text = f.readlines()
+                    if 'pos' in txtfile:
+                        labels.append(1)
+                    else:
+                        labels.append(0)
+                    reviews.append(text[0])
+        dataSet = pd.DataFrame(data={'label':labels,'review':reviews})
+        logging.info("acllmdb 数据集大小:{}".format(len(dataSet)))
     if data_dir == "holtel_sent":
-        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='    ',header=None,engine='python')
+        dataSet = pd.read_csv(os.path.join(data_dir,'data.txt'),sep='    ',header=None,engine='python',encoding='utf8')
         dataSet.columns = ['label','review']
     trainX, trainY, testX, testY = split_dataSet(dataSet['review'],dataSet['label'])
     return trainX, trainY, testX, testY
@@ -57,11 +72,13 @@ class SentimentData(Dataset):
         return cls(dataX, dataY)
 
 
+
+
 class Job:
     def __init__(self,data_dir, pool_type):
         self.device = get_device()
-        self.batch_size = 16
-        self.epoches = 5
+        self.batch_size = 8
+        self.epoches = 6
         self.lr = 2e-5
         self.data_dir = data_dir
         self.max_length = 510
@@ -74,7 +91,10 @@ class Job:
             os.makedirs(self.model_dir)
         self.train_pkl_file = os.path.join(self.data_dir,"train.pkl")
         self.valid_pkl_file = os.path.join(self.data_dir,"valid.pkl")
-        self.pretrained_name = "hfl/chinese-roberta-wwm-ext"
+        if self.data_dir == 'aclImdb_v1':
+            self.pretrained_name = "bert-base-cased"
+        else:
+            self.pretrained_name = "hfl/chinese-roberta-wwm-ext"
         self.bert_tokenizer = BertTokenizer.from_pretrained(
             self.pretrained_name)
         self.bert_model = BertModel.from_pretrained(self.pretrained_name)
@@ -120,7 +140,19 @@ class Job:
             model = BertEncoderClassfier(self.bert_model, self.bert_tokenizer, self.num_class, self.bert_config, max_length = self.max_length, encoder_type = self.pool_type, dropout=0.2)
         else:
             model = BertSequenceClassfier(self.bert_model,self.bert_tokenizer,self.bert_config,num_class=self.num_class,pool_type=self.pool_type)
-        optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
+
+        Roberta_params = list(map(id, model.bert_model.parameters()))
+        base_params = filter(lambda p: id(
+            p) not in Roberta_params, model.parameters())
+
+        optimizer = torch.optim.SGD(
+            [
+                {"params": model.bert_model.parameters(), "lr": 4e-5},
+                {"params": base_params},
+            ],
+            momentum=0.95, weight_decay=0.01, lr=0.001
+        )
+        # optimizer = torch.optim.AdamW(model.parameters(), lr=self.lr)
         criterion = nn.CrossEntropyLoss()
         lr_scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps= self.warmup_ratio*self.epoches*len(train_dataloader), num_training_steps=self.epoches*len(train_dataloader))
         self.train_loss,self.valid_loss = train_and_evaluate(model, train_dataloader, valid_dataloader, optimizer, criterion,classify_metrics, self.epoches, self.model_dir,lr_scheduler,restore_file=None)
@@ -160,8 +192,8 @@ class Job:
 
 
 if __name__ == "__main__":
-    model_dirs = ['holtel_sent','weibo_moods']
-    pool_types = ['max','BiGRU','AttBiGRU','DPCNN']
+    model_dirs = ['holtel_sent']
+    pool_types = ['DPCNN','BiGRU','max','Att_BiGRU']
     for model_dir in model_dirs:
         for pool_type in pool_types:
             job = Job(model_dir,pool_type)
